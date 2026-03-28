@@ -2,8 +2,6 @@ package com.duyminhdev.cf_manager.dto.base;
 
 import lombok.Data;
 
-import java.util.List;
-
 @Data
 public class PageResponse<T> {
     private T data;
