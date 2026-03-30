@@ -1,0 +1,1620 @@
+Dưới đây là **PHASE 5 final hoàn chỉnh, đầy đủ, không cắt bớt**, đã hợp nhất từ:
+
+* **PHASE 5 draft ban đầu** của bạn 
+* **các patch/fix đã review** như loại `DONE` khỏi aggregate checkout, gom rule trạng thái bàn về một chỗ, thêm `@Param(...)` cho JPQL named params 
+* **service flow cũ** để bám sát business nhất: trạng thái bàn, booking, order, grouped dish checkout, invoice, confirm payment, trả bàn về trạng thái phù hợp 
+
+Bản này giữ nguyên scope nghiệp vụ của PHASE 5 ban đầu, nhưng đã refactor để:
+
+* tránh lệch trạng thái bàn giữa booking/order/invoice
+* aggregate checkout không kéo lại order đã `DONE`
+* dùng **booking upcoming window 2 giờ** để xét `BOOKED`
+* **giữ hard delete** cho order details, có comment TODO để sau này review/refactor nếu cần
+
+---
+
+# PHASE 5 FINAL — SERVICE LAYER FULL CODE
+
+## 5.0. Repository patch cần dùng cho service final
+
+### 5.0.1. `TableBookingRepository.java`
+
+```java
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.TableBooking;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Optional;
+
+@Repository
+public interface TableBookingRepository extends JpaRepository<TableBooking, Integer>, JpaSpecificationExecutor<TableBooking> {
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    Optional<TableBooking> findByIdAndActiveTrue(Integer id);
+
+    boolean existsByIdAndActiveTrue(Integer id);
+
+    @Query("""
+            select case when count(tb) > 0 then true else false end
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) in :statuses
+              and tb.bookingTime >= :fromTime
+              and tb.bookingTime <= :toTime
+            """)
+    boolean existsUpcomingActiveBookingByTableIdAndStatuses(
+            @Param("tableId") Integer tableId,
+            @Param("statuses") Collection<String> statuses,
+            @Param("fromTime") LocalDateTime fromTime,
+            @Param("toTime") LocalDateTime toTime
+    );
+}
+```
+
+---
+
+### 5.0.2. `DishOrderRepository.java`
+
+```java
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.DishOrder;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface DishOrderRepository extends JpaRepository<DishOrder, Integer> {
+
+    @EntityGraph(attributePaths = {"table", "account", "status"})
+    List<DishOrder> findAllByTableIdAndActiveTrueOrderByCreatedTimeDesc(Integer tableId);
+
+    @EntityGraph(attributePaths = {"table", "account", "status"})
+    Optional<DishOrder> findByIdAndActiveTrue(Integer id);
+
+    @Query("""
+            select case when count(do1) > 0 then true else false end
+            from DishOrder do1
+            join do1.status s
+            where do1.table.id = :tableId
+              and do1.active = true
+              and upper(s.dishOrderStatusCode) not in :finishedStatusCodes
+            """)
+    boolean existsUnfinishedOrdersByTableId(
+            @Param("tableId") Integer tableId,
+            @Param("finishedStatusCodes") Collection<String> finishedStatusCodes
+    );
+
+    @Query("""
+            select do1
+            from DishOrder do1
+            join fetch do1.table t
+            join fetch do1.account a
+            join fetch do1.status s
+            where do1.table.id = :tableId
+              and do1.active = true
+              and upper(s.dishOrderStatusCode) not in :finishedStatusCodes
+            order by do1.createdTime desc
+            """)
+    List<DishOrder> findAllUnfinishedOrdersByTableId(
+            @Param("tableId") Integer tableId,
+            @Param("finishedStatusCodes") Collection<String> finishedStatusCodes
+    );
+}
+```
+
+---
+
+### 5.0.3. `InvoiceRepository.java`
+
+```java
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.Invoice;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+@Repository
+public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    Optional<Invoice> findByIdAndActiveTrue(Integer id);
+
+    long countByActiveTrue();
+
+    long countByCreatedTimeBetweenAndActiveTrue(LocalDateTime start, LocalDateTime end);
+}
+```
+
+---
+
+## 5.0.4. `NativeSqlDishOrderDetailRepositoryImpl.java`
+
+Bản final cho aggregate checkout, loại cả `CANCELLED` và `DONE`.
+
+```java
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+@RequiredArgsConstructor
+public class NativeSqlDishOrderDetailRepositoryImpl implements NativeSqlDishOrderDetailRepository {
+
+    @PersistenceContext
+    private final EntityManager entityManager;
+
+    @Override
+    public List<DishGroupedByTableNativeResultDTO> findGroupedByTableId(Integer tableId) {
+        String sql = """
+                SELECT
+                    d.id AS dishId,
+                    d.dish_code AS dishCode,
+                    d.dish_name AS dishName,
+                    d.photo AS dishPhoto,
+                    SUM(dod.quantity) AS totalQuantity,
+                    dod.price AS unitPrice,
+                    SUM(dod.quantity * dod.price) AS totalPrice
+                FROM dish_order_detail dod
+                INNER JOIN dish_order do1
+                    ON do1.id = dod.dish_order_id
+                INNER JOIN dish d
+                    ON d.id = dod.dish_id
+                INNER JOIN dish_order_status dos
+                    ON dos.id = do1.dish_order_status_id
+                WHERE do1.dining_table_id = :tableId
+                  AND (do1.is_active = 1 OR do1.is_active = true)
+                  AND (dod.is_active = 1 OR dod.is_active = true)
+                  AND (d.is_active = 1 OR d.is_active = true)
+                  AND UPPER(dos.dish_order_status_code) NOT IN ('CANCELLED', 'DONE')
+                GROUP BY
+                    d.id,
+                    d.dish_code,
+                    d.dish_name,
+                    d.photo,
+                    dod.price
+                ORDER BY d.dish_name ASC
+                """;
+
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        query.setParameter("tableId", tableId);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+
+        return tuples.stream()
+                .map(this::mapTupleToDto)
+                .toList();
+    }
+
+    private DishGroupedByTableNativeResultDTO mapTupleToDto(Tuple tuple) {
+        return DishGroupedByTableNativeResultDTO.builder()
+                .dishId(NativeSqlTupleUtils.getInteger(tuple, "dishId"))
+                .dishCode(NativeSqlTupleUtils.getString(tuple, "dishCode"))
+                .dishName(NativeSqlTupleUtils.getString(tuple, "dishName"))
+                .dishPhoto(NativeSqlTupleUtils.getString(tuple, "dishPhoto"))
+                .totalQuantity(NativeSqlTupleUtils.getInteger(tuple, "totalQuantity"))
+                .unitPrice(NativeSqlTupleUtils.getBigDecimal(tuple, "unitPrice"))
+                .totalPrice(NativeSqlTupleUtils.getBigDecimal(tuple, "totalPrice"))
+                .build();
+    }
+}
+```
+
+---
+
+# 5.1. Service support helper
+
+## 5.1.1. `ServiceSupport.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl.support;
+
+import com.duyminhdev.cf_manager.entity.Account;
+import com.duyminhdev.cf_manager.entity.Dish;
+import com.duyminhdev.cf_manager.entity.DishOrderStatus;
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
+import com.duyminhdev.cf_manager.enums.DishOrderStatusEnum;
+import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
+import com.duyminhdev.cf_manager.enums.PaymentStatusEnum;
+import com.duyminhdev.cf_manager.enums.TableStatusEnum;
+import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
+import com.duyminhdev.cf_manager.repository.AccountRepository;
+import com.duyminhdev.cf_manager.repository.DishOrderRepository;
+import com.duyminhdev.cf_manager.repository.DishOrderStatusRepository;
+import com.duyminhdev.cf_manager.repository.DishRepository;
+import com.duyminhdev.cf_manager.repository.TableBookingRepository;
+import com.duyminhdev.cf_manager.repository.TableRepository;
+import com.duyminhdev.cf_manager.utils.SecurityUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Component
+@RequiredArgsConstructor
+public class ServiceSupport {
+
+    private static final long UPCOMING_BOOKING_WINDOW_HOURS = 2L;
+
+    private final AccountRepository accountRepository;
+    private final TableRepository tableRepository;
+    private final DishRepository dishRepository;
+    private final DishOrderStatusRepository dishOrderStatusRepository;
+    private final TableBookingRepository tableBookingRepository;
+    private final DishOrderRepository dishOrderRepository;
+
+    public Account getCurrentAccount() {
+        String username = SecurityUtils.getCurrentUsername();
+        return accountRepository.findByUsername(username)
+                .filter(account -> Boolean.TRUE.equals(account.getActive()))
+                .orElseThrow(() -> new InvalidDataException("Current authenticated account is invalid or inactive"));
+    }
+
+    public TableEntity getActiveTable(Integer tableId) {
+        return tableRepository.findByIdAndActiveTrue(tableId)
+                .orElseThrow(() -> new InvalidDataException("Table not found with id: " + tableId));
+    }
+
+    public Dish getActiveDish(Integer dishId) {
+        return dishRepository.findByIdAndActiveTrue(dishId)
+                .orElseThrow(() -> new InvalidDataException("Dish not found with id: " + dishId));
+    }
+
+    public DishOrderStatus getDishOrderStatusByCode(String statusCode) {
+        String normalized = normalizeCode(statusCode);
+        return dishOrderStatusRepository.findByDishOrderStatusCode(normalized)
+                .filter(status -> Boolean.TRUE.equals(status.getActive()))
+                .orElseThrow(() -> new InvalidDataException("Dish order status not found with code: " + statusCode));
+    }
+
+    public void validateBookingTime(LocalDateTime bookingTime) {
+        if (bookingTime == null) {
+            throw new InvalidDataException("bookingTime is required");
+        }
+        if (bookingTime.isBefore(LocalDateTime.now())) {
+            throw new InvalidDataException("bookingTime must not be in the past");
+        }
+    }
+
+    public void validateTableStatusCode(String tableStatus) {
+        if (!TableStatusEnum.isValidCode(tableStatus)) {
+            throw new InvalidDataException("Invalid table status: " + tableStatus);
+        }
+    }
+
+    public void validateBookingStatusCode(String bookingStatus) {
+        if (!BookingStatusEnum.isValidCode(bookingStatus)) {
+            throw new InvalidDataException("Invalid booking status: " + bookingStatus);
+        }
+    }
+
+    public void validateDishOrderStatusCode(String dishOrderStatus) {
+        if (!DishOrderStatusEnum.isValidCode(dishOrderStatus)) {
+            throw new InvalidDataException("Invalid dish order status: " + dishOrderStatus);
+        }
+    }
+
+    public void validatePaymentStatusCode(String paymentStatus) {
+        if (!PaymentStatusEnum.isValidCode(paymentStatus)) {
+            throw new InvalidDataException("Invalid payment status: " + paymentStatus);
+        }
+    }
+
+    public void validatePaymentMethodCode(String paymentMethod) {
+        if (!PaymentMethodEnum.isValidCode(paymentMethod)) {
+            throw new InvalidDataException("Invalid payment method: " + paymentMethod);
+        }
+    }
+
+    public void updateTableStatus(TableEntity table, TableStatusEnum status) {
+        table.setTableStatus(status.getCode());
+        tableRepository.save(table);
+    }
+
+    public boolean hasUpcomingActiveBooking(Integer tableId) {
+        LocalDateTime fromTime = LocalDateTime.now();
+        LocalDateTime toTime = fromTime.plusHours(UPCOMING_BOOKING_WINDOW_HOURS);
+
+        return tableBookingRepository.existsUpcomingActiveBookingByTableIdAndStatuses(
+                tableId,
+                List.of(
+                        BookingStatusEnum.PENDING_CONFIRMATION.getCode(),
+                        BookingStatusEnum.CONFIRMED.getCode()
+                ),
+                fromTime,
+                toTime
+        );
+    }
+
+    public boolean hasUnfinishedOrders(Integer tableId) {
+        return dishOrderRepository.existsUnfinishedOrdersByTableId(
+                tableId,
+                List.of(
+                        DishOrderStatusEnum.CANCELLED.getCode(),
+                        DishOrderStatusEnum.DONE.getCode()
+                )
+        );
+    }
+
+    /**
+     * Business priority:
+     * 1) Nếu còn order chưa hoàn tất => OCCUPIED
+     * 2) Nếu không còn order nhưng có booking sắp tới trong 2 giờ => BOOKED
+     * 3) Nếu không còn gì => AVAILABLE
+     */
+    public TableStatusEnum resolveTableStatus(Integer tableId) {
+        if (hasUnfinishedOrders(tableId)) {
+            return TableStatusEnum.OCCUPIED;
+        }
+
+        if (hasUpcomingActiveBooking(tableId)) {
+            return TableStatusEnum.BOOKED;
+        }
+
+        return TableStatusEnum.AVAILABLE;
+    }
+
+    public void recomputeAndSyncTableStatus(Integer tableId) {
+        TableEntity table = getActiveTable(tableId);
+        TableStatusEnum resolvedStatus = resolveTableStatus(tableId);
+        updateTableStatus(table, resolvedStatus);
+    }
+
+    private String normalizeCode(String value) {
+        return value == null ? null : value.trim().toUpperCase();
+    }
+}
+```
+
+---
+
+# 5.2. Service Interfaces
+
+## 5.2.1. `TableService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableSearchResponseDTO;
+
+import java.util.List;
+
+public interface TableService {
+
+    PageResponse<List<TableSearchResponseDTO>> search(TableSearchRequestDTO request);
+
+    TableDetailResponseDTO detail(TableDetailRequestDTO request);
+
+    Boolean updateStatus(TableStatusUpdateRequestDTO request);
+}
+```
+
+---
+
+## 5.2.2. `TableBookingService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table_booking.TableBookingResponseDTO;
+
+import java.util.List;
+
+public interface TableBookingService {
+
+    PageResponse<List<TableBookingResponseDTO>> search(TableBookingSearchRequestDTO request);
+
+    TableBookingResponseDTO create(TableBookingCreateRequestDTO request);
+
+    TableBookingResponseDTO update(TableBookingUpdateRequestDTO request);
+
+    Boolean updateStatus(TableBookingStatusUpdateRequestDTO request);
+}
+```
+
+---
+
+## 5.2.3. `DishService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish.DishResponseDTO;
+
+import java.util.List;
+
+public interface DishService {
+
+    List<DishResponseDTO> getAll(DishListRequestDTO request);
+
+    PageResponse<List<DishResponseDTO>> search(DishSearchRequestDTO request);
+}
+```
+
+---
+
+## 5.2.4. `DishCategoryService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_category.DishCategoryListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_category.DishCategoryResponseDTO;
+
+import java.util.List;
+
+public interface DishCategoryService {
+
+    List<DishCategoryResponseDTO> getAll(DishCategoryListRequestDTO request);
+}
+```
+
+---
+
+## 5.2.5. `DishOrderService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderListByTableRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order.DishOrderResponseDTO;
+
+import java.util.List;
+
+public interface DishOrderService {
+
+    List<DishOrderResponseDTO> listByTable(DishOrderListByTableRequestDTO request);
+
+    DishOrderResponseDTO create(DishOrderCreateRequestDTO request);
+
+    DishOrderResponseDTO update(DishOrderUpdateRequestDTO request);
+
+    Boolean updateStatus(DishOrderStatusUpdateRequestDTO request);
+}
+```
+
+---
+
+## 5.2.6. `DishOrderDetailService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByOrderRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByTableRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishGroupedByTableResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishOrderDetailResponseDTO;
+
+import java.util.List;
+
+public interface DishOrderDetailService {
+
+    List<DishOrderDetailResponseDTO> listByOrder(DishOrderDetailListByOrderRequestDTO request);
+
+    List<DishGroupedByTableResponseDTO> listByTable(DishOrderDetailListByTableRequestDTO request);
+}
+```
+
+---
+
+## 5.2.7. `PaymentMethodService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.crud.request.payment_method.PaymentMethodListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.payment_method.PaymentMethodResponseDTO;
+
+import java.util.List;
+
+public interface PaymentMethodService {
+
+    List<PaymentMethodResponseDTO> getAll(PaymentMethodListRequestDTO request);
+}
+```
+
+---
+
+## 5.2.8. `InvoiceService.java`
+
+```java
+package com.duyminhdev.cf_manager.service;
+
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceConfirmPaymentRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceCountRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceConfirmPaymentResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceCountResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceResponseDTO;
+
+public interface InvoiceService {
+
+    InvoiceCountResponseDTO count(InvoiceCountRequestDTO request);
+
+    InvoiceResponseDTO create(InvoiceCreateRequestDTO request);
+
+    InvoiceConfirmPaymentResponseDTO confirmPayment(InvoiceConfirmPaymentRequestDTO request);
+
+    InvoiceDetailResponseDTO detail(InvoiceDetailRequestDTO request);
+}
+```
+
+---
+
+# 5.3. Service Implementations
+
+## 5.3.1. `TableServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableSearchResponseDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import com.duyminhdev.cf_manager.enums.TableStatusEnum;
+import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
+import com.duyminhdev.cf_manager.mapper.TableMapper;
+import com.duyminhdev.cf_manager.repository.TableRepository;
+import com.duyminhdev.cf_manager.repository.impl.NativeSqlTableRepository;
+import com.duyminhdev.cf_manager.service.TableService;
+import com.duyminhdev.cf_manager.service.impl.support.ServiceSupport;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class TableServiceImpl implements TableService {
+
+    private final NativeSqlTableRepository nativeSqlTableRepository;
+    private final TableRepository tableRepository;
+    private final TableMapper tableMapper;
+    private final ServiceSupport serviceSupport;
+
+    @Override
+    public PageResponse<List<TableSearchResponseDTO>> search(TableSearchRequestDTO request) {
+        // Step 1: lấy raw aggregate của danh sách bàn
+        PageResponse<List<TableSearchNativeResultDTO>> pageResult = nativeSqlTableRepository.search(request);
+
+        // Step 2: map sang response DTO
+        List<TableSearchResponseDTO> mapped = pageResult.getData().stream()
+                .map(tableMapper::toSearchResponseDTO)
+                .toList();
+
+        // Step 3: giữ lại metadata phân trang
+        PageResponse<List<TableSearchResponseDTO>> response = new PageResponse<>();
+        response.setData(mapped);
+        response.setPageNo(pageResult.getPageNo());
+        response.setPageSize(pageResult.getPageSize());
+        response.setTotalElements(pageResult.getTotalElements());
+        response.setTotalPages(pageResult.getTotalPages());
+        return response;
+    }
+
+    @Override
+    public TableDetailResponseDTO detail(TableDetailRequestDTO request) {
+        // Step 1: load bàn active
+        TableEntity table = tableRepository.findByIdAndActiveTrue(request.getTableId())
+                .orElseThrow(() -> new InvalidDataException(
+                        "Table not found with id: " + request.getTableId()
+                ));
+
+        // Step 2: map detail response
+        return tableMapper.toDetailResponseDTO(table);
+    }
+
+    @Override
+    @Transactional
+    public Boolean updateStatus(TableStatusUpdateRequestDTO request) {
+        // Step 1: validate mã trạng thái
+        serviceSupport.validateTableStatusCode(request.getTableStatus());
+
+        // Step 2: load bàn
+        TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+
+        // Step 3: cập nhật trực tiếp theo action từ ngoài
+        table.setTableStatus(TableStatusEnum.fromCode(request.getTableStatus()).getCode());
+        tableRepository.save(table);
+        return true;
+    }
+}
+```
+
+---
+
+## 5.3.2. `TableBookingServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table_booking.TableBookingResponseDTO;
+import com.duyminhdev.cf_manager.entity.Account;
+import com.duyminhdev.cf_manager.entity.TableBooking;
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
+import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
+import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
+import com.duyminhdev.cf_manager.repository.TableBookingRepository;
+import com.duyminhdev.cf_manager.repository.spec.TableBookingSpec;
+import com.duyminhdev.cf_manager.service.TableBookingService;
+import com.duyminhdev.cf_manager.service.impl.support.ServiceSupport;
+import com.duyminhdev.cf_manager.utils.PageUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class TableBookingServiceImpl implements TableBookingService {
+
+    private final TableBookingRepository tableBookingRepository;
+    private final TableBookingMapper tableBookingMapper;
+    private final ServiceSupport serviceSupport;
+
+    @Override
+    public PageResponse<List<TableBookingResponseDTO>> search(TableBookingSearchRequestDTO request) {
+        int pageNo = PageUtils.normalizePage(request.getPage());
+        int pageSize = PageUtils.normalizeLimit(request.getLimit());
+
+        Pageable pageable = PageRequest.of(
+                pageNo,
+                pageSize,
+                TableBookingSpec.resolveSort(request.getSortField(), request.getSortDir())
+        );
+
+        // Step 1: search booking history theo spec
+        Page<TableBooking> page = tableBookingRepository.findAll(
+                TableBookingSpec.byCriteria(request),
+                pageable
+        );
+
+        // Step 2: map sang response DTO
+        List<TableBookingResponseDTO> data = page.getContent().stream()
+                .map(tableBookingMapper::toResponseDTO)
+                .toList();
+
+        // Step 3: build page response
+        PageResponse<List<TableBookingResponseDTO>> response = new PageResponse<>();
+        response.setData(data);
+        response.setPageNo(page.getNumber());
+        response.setPageSize(page.getSize());
+        response.setTotalElements((int) page.getTotalElements());
+        response.setTotalPages(page.getTotalPages());
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO create(TableBookingCreateRequestDTO request) {
+        // Step 1: validate business input
+        serviceSupport.validateBookingTime(request.getBookingTime());
+
+        String bookingStatus = request.getBookingStatus();
+        if (bookingStatus == null || bookingStatus.isBlank()) {
+            bookingStatus = BookingStatusEnum.PENDING_CONFIRMATION.getCode();
+        }
+        serviceSupport.validateBookingStatusCode(bookingStatus);
+
+        // Step 2: resolve table + current account
+        TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+        Account account = serviceSupport.getCurrentAccount();
+
+        // Step 3: map request -> booking entity shell
+        TableBooking entity = tableBookingMapper.toNewEntity(request);
+        entity.setBookingStatus(BookingStatusEnum.fromCode(bookingStatus).getCode());
+        entity.setTable(table);
+        entity.setAccount(account);
+        entity.setCreatedTime(LocalDateTime.now());
+        entity.setActive(true);
+
+        // Step 4: save booking
+        TableBooking saved = tableBookingRepository.save(entity);
+
+        // Step 5: recompute trạng thái bàn:
+        // nếu có unfinished order -> OCCUPIED
+        // else nếu có booking upcoming trong 2h -> BOOKED
+        // else -> AVAILABLE
+        serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
+
+        // Step 6: trả response
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO update(TableBookingUpdateRequestDTO request) {
+        // Step 1: validate business input
+        serviceSupport.validateBookingTime(request.getBookingTime());
+
+        String bookingStatus = request.getBookingStatus();
+        if (bookingStatus == null || bookingStatus.isBlank()) {
+            bookingStatus = BookingStatusEnum.PENDING_CONFIRMATION.getCode();
+        }
+        serviceSupport.validateBookingStatusCode(bookingStatus);
+
+        // Step 2: load booking hiện tại
+        TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
+                .orElseThrow(() -> new InvalidDataException(
+                        "Booking not found with id: " + request.getBookingId()
+                ));
+
+        Integer oldTableId = existing.getTable() != null ? existing.getTable().getId() : null;
+
+        // Step 3: resolve bàn mới
+        TableEntity newTable = serviceSupport.getActiveTable(request.getTableId());
+
+        // Step 4: update entity fields
+        tableBookingMapper.updateEntityFromRequest(request, existing);
+        existing.setTable(newTable);
+        existing.setBookingStatus(BookingStatusEnum.fromCode(bookingStatus).getCode());
+
+        // Step 5: save booking
+        TableBooking saved = tableBookingRepository.save(existing);
+
+        // Step 6: nếu booking đổi bàn thì recompute cả bàn cũ và bàn mới
+        if (oldTableId != null) {
+            serviceSupport.recomputeAndSyncTableStatus(oldTableId);
+        }
+        serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
+
+        // Step 7: trả response
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public Boolean updateStatus(TableBookingStatusUpdateRequestDTO request) {
+        // Step 1: validate status
+        serviceSupport.validateBookingStatusCode(request.getBookingStatus());
+
+        // Step 2: load booking
+        TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
+                .orElseThrow(() -> new InvalidDataException(
+                        "Booking not found with id: " + request.getBookingId()
+                ));
+
+        // Step 3: update status
+        existing.setBookingStatus(BookingStatusEnum.fromCode(request.getBookingStatus()).getCode());
+        tableBookingRepository.save(existing);
+
+        // Step 4: recompute trạng thái bàn sau thay đổi booking
+        serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
+
+        return true;
+    }
+}
+```
+
+---
+
+## 5.3.3. `DishServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish.DishResponseDTO;
+import com.duyminhdev.cf_manager.entity.Dish;
+import com.duyminhdev.cf_manager.mapper.DishMapper;
+import com.duyminhdev.cf_manager.repository.DishRepository;
+import com.duyminhdev.cf_manager.repository.spec.DishSpec;
+import com.duyminhdev.cf_manager.service.DishService;
+import com.duyminhdev.cf_manager.utils.PageUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class DishServiceImpl implements DishService {
+
+    private final DishRepository dishRepository;
+    private final DishMapper dishMapper;
+
+    @Override
+    public List<DishResponseDTO> getAll(DishListRequestDTO request) {
+        // Step 1: load menu
+        List<Dish> dishes;
+        if (request.getActive() == null || request.getActive()) {
+            dishes = dishRepository.findAllByActiveTrueOrderByDishNameAsc();
+        } else {
+            dishes = dishRepository.findAll(Sort.by(Sort.Direction.ASC, "dishName"));
+        }
+
+        // Step 2: map response
+        return dishes.stream()
+                .map(dishMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    public PageResponse<List<DishResponseDTO>> search(DishSearchRequestDTO request) {
+        int pageNo = PageUtils.normalizePage(request.getPage());
+        int pageSize = PageUtils.normalizeLimit(request.getLimit());
+
+        Pageable pageable = PageRequest.of(
+                pageNo,
+                pageSize,
+                DishSpec.resolveSort(request.getSortField(), request.getSortDir())
+        );
+
+        // Step 1: search dish theo criteria
+        Page<Dish> page = dishRepository.findAll(DishSpec.byCriteria(request), pageable);
+
+        // Step 2: map DTO
+        List<DishResponseDTO> data = page.getContent().stream()
+                .map(dishMapper::toResponseDTO)
+                .toList();
+
+        // Step 3: build page response
+        PageResponse<List<DishResponseDTO>> response = new PageResponse<>();
+        response.setData(data);
+        response.setPageNo(page.getNumber());
+        response.setPageSize(page.getSize());
+        response.setTotalElements((int) page.getTotalElements());
+        response.setTotalPages(page.getTotalPages());
+        return response;
+    }
+}
+```
+
+---
+
+## 5.3.4. `DishCategoryServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_category.DishCategoryListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_category.DishCategoryResponseDTO;
+import com.duyminhdev.cf_manager.entity.DishCategory;
+import com.duyminhdev.cf_manager.mapper.DishCategoryMapper;
+import com.duyminhdev.cf_manager.repository.DishCategoryRepository;
+import com.duyminhdev.cf_manager.service.DishCategoryService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Comparator;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class DishCategoryServiceImpl implements DishCategoryService {
+
+    private final DishCategoryRepository dishCategoryRepository;
+    private final DishCategoryMapper dishCategoryMapper;
+
+    @Override
+    public List<DishCategoryResponseDTO> getAll(DishCategoryListRequestDTO request) {
+        // Step 1: load categories
+        List<DishCategory> categories;
+
+        if (request.getActive() == null || request.getActive()) {
+            categories = dishCategoryRepository.findAllByActiveTrueOrderByDishCateogryNameAsc();
+        } else {
+            categories = dishCategoryRepository.findAll().stream()
+                    .sorted(Comparator.comparing(DishCategory::getDishCateogryName))
+                    .toList();
+        }
+
+        // Step 2: map response
+        return categories.stream()
+                .map(dishCategoryMapper::toResponseDTO)
+                .toList();
+    }
+}
+```
+
+---
+
+## 5.3.5. `DishOrderDetailServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByOrderRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByTableRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishGroupedByTableResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishOrderDetailResponseDTO;
+import com.duyminhdev.cf_manager.mapper.DishOrderDetailMapper;
+import com.duyminhdev.cf_manager.repository.DishOrderDetailRepository;
+import com.duyminhdev.cf_manager.repository.impl.NativeSqlDishOrderDetailRepository;
+import com.duyminhdev.cf_manager.service.DishOrderDetailService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class DishOrderDetailServiceImpl implements DishOrderDetailService {
+
+    private final DishOrderDetailRepository dishOrderDetailRepository;
+    private final NativeSqlDishOrderDetailRepository nativeSqlDishOrderDetailRepository;
+    private final DishOrderDetailMapper dishOrderDetailMapper;
+
+    @Override
+    public List<DishOrderDetailResponseDTO> listByOrder(DishOrderDetailListByOrderRequestDTO request) {
+        // Step 1: load active detail lines theo order
+        return dishOrderDetailRepository.findAllByDishOrderIdAndActiveTrueOrderByCreatedTimeAsc(request.getDishOrderId())
+                .stream()
+                // Step 2: map DTO
+                .map(dishOrderDetailMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    public List<DishGroupedByTableResponseDTO> listByTable(DishOrderDetailListByTableRequestDTO request) {
+        // Step 1: load grouped dishes đang còn hiệu lực thanh toán của bàn
+        return nativeSqlDishOrderDetailRepository.findGroupedByTableId(request.getTableId())
+                .stream()
+                // Step 2: map DTO checkout
+                .map(dishOrderDetailMapper::toGroupedResponseDTO)
+                .toList();
+    }
+}
+```
+
+---
+
+## 5.3.6. `DishOrderServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderDetailPayloadDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderListByTableRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.entity.Account;
+import com.duyminhdev.cf_manager.entity.Dish;
+import com.duyminhdev.cf_manager.entity.DishOrder;
+import com.duyminhdev.cf_manager.entity.DishOrderDetail;
+import com.duyminhdev.cf_manager.entity.DishOrderStatus;
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import com.duyminhdev.cf_manager.enums.DishOrderStatusEnum;
+import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
+import com.duyminhdev.cf_manager.mapper.DishOrderDetailMapper;
+import com.duyminhdev.cf_manager.mapper.DishOrderMapper;
+import com.duyminhdev.cf_manager.repository.DishOrderDetailRepository;
+import com.duyminhdev.cf_manager.repository.DishOrderRepository;
+import com.duyminhdev.cf_manager.service.DishOrderService;
+import com.duyminhdev.cf_manager.service.impl.support.ServiceSupport;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class DishOrderServiceImpl implements DishOrderService {
+
+    private final DishOrderRepository dishOrderRepository;
+    private final DishOrderDetailRepository dishOrderDetailRepository;
+    private final DishOrderMapper dishOrderMapper;
+    private final DishOrderDetailMapper dishOrderDetailMapper;
+    private final ServiceSupport serviceSupport;
+
+    @Override
+    public List<DishOrderResponseDTO> listByTable(DishOrderListByTableRequestDTO request) {
+        // Step 1: load order history theo bàn
+        return dishOrderRepository.findAllByTableIdAndActiveTrueOrderByCreatedTimeDesc(request.getTableId())
+                .stream()
+                // Step 2: map response
+                .map(dishOrderMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public DishOrderResponseDTO create(DishOrderCreateRequestDTO request) {
+        // Step 1: resolve default order status
+        String statusCode = request.getDishOrderStatus();
+        if (statusCode == null || statusCode.isBlank()) {
+            statusCode = DishOrderStatusEnum.PROCESSING.getCode();
+        }
+        serviceSupport.validateDishOrderStatusCode(statusCode);
+
+        // Step 2: resolve dependencies
+        TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+        Account currentAccount = serviceSupport.getCurrentAccount();
+        DishOrderStatus dishOrderStatus = serviceSupport.getDishOrderStatusByCode(statusCode);
+
+        // Step 3: tạo order header
+        DishOrder order = DishOrder.builder()
+                .table(table)
+                .account(currentAccount)
+                .status(dishOrderStatus)
+                .createdTime(LocalDateTime.now())
+                .active(true)
+                .build();
+
+        DishOrder savedOrder = dishOrderRepository.save(order);
+
+        // Step 4: replace detail lines
+        replaceOrderDetails(savedOrder, request.getDishOrderDetails());
+
+        // Step 5: recompute table status theo business priority
+        serviceSupport.recomputeAndSyncTableStatus(table.getId());
+
+        // Step 6: trả response
+        return dishOrderMapper.toResponseDTO(savedOrder);
+    }
+
+    @Override
+    @Transactional
+    public DishOrderResponseDTO update(DishOrderUpdateRequestDTO request) {
+        // Step 1: resolve status code
+        String statusCode = request.getDishOrderStatus();
+        if (statusCode == null || statusCode.isBlank()) {
+            statusCode = DishOrderStatusEnum.PROCESSING.getCode();
+        }
+        serviceSupport.validateDishOrderStatusCode(statusCode);
+
+        // Step 2: load order hiện tại
+        DishOrder existing = dishOrderRepository.findByIdAndActiveTrue(request.getDishOrderId())
+                .orElseThrow(() -> new InvalidDataException(
+                        "Dish order not found with id: " + request.getDishOrderId()
+                ));
+
+        Integer oldTableId = existing.getTable() != null ? existing.getTable().getId() : null;
+
+        // Step 3: resolve bàn mới + trạng thái mới
+        TableEntity newTable = serviceSupport.getActiveTable(request.getTableId());
+        DishOrderStatus dishOrderStatus = serviceSupport.getDishOrderStatusByCode(statusCode);
+
+        // Step 4: update header
+        existing.setTable(newTable);
+        existing.setStatus(dishOrderStatus);
+
+        DishOrder savedOrder = dishOrderRepository.save(existing);
+
+        // Step 5: replace detail lines
+        replaceOrderDetails(savedOrder, request.getDishOrderDetails());
+
+        // Step 6: recompute bàn cũ + bàn mới nếu có chuyển bàn
+        if (oldTableId != null) {
+            serviceSupport.recomputeAndSyncTableStatus(oldTableId);
+        }
+        serviceSupport.recomputeAndSyncTableStatus(newTable.getId());
+
+        // Step 7: trả response
+        return dishOrderMapper.toResponseDTO(savedOrder);
+    }
+
+    @Override
+    @Transactional
+    public Boolean updateStatus(DishOrderStatusUpdateRequestDTO request) {
+        // Step 1: validate status
+        serviceSupport.validateDishOrderStatusCode(request.getDishOrderStatus());
+
+        // Step 2: load order
+        DishOrder existing = dishOrderRepository.findByIdAndActiveTrue(request.getDishOrderId())
+                .orElseThrow(() -> new InvalidDataException(
+                        "Dish order not found with id: " + request.getDishOrderId()
+                ));
+
+        // Step 3: update status
+        DishOrderStatus newStatus = serviceSupport.getDishOrderStatusByCode(request.getDishOrderStatus());
+        existing.setStatus(newStatus);
+        dishOrderRepository.save(existing);
+
+        // Step 4: recompute table status sau khi order đổi trạng thái
+        serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
+
+        return true;
+    }
+
+    private void replaceOrderDetails(DishOrder order, List<DishOrderDetailPayloadDTO> payloads) {
+        // CURRENT DECISION:
+        // Giữ hard delete theo quyết định hiện tại.
+        // TODO: review/refactor sau này sang soft delete nếu business cần audit lịch sử detail đầy đủ.
+        dishOrderDetailRepository.deleteAllByDishOrderId(order.getId());
+
+        List<DishOrderDetail> details = payloads.stream()
+                .map(payload -> {
+                    // Step 1: resolve dish active
+                    Dish dish = serviceSupport.getActiveDish(payload.getDishId());
+
+                    // Step 2: map payload -> entity shell
+                    DishOrderDetail detail = dishOrderDetailMapper.toNewEntity(payload);
+
+                    // Step 3: set association + snapshot price tại thời điểm gọi món
+                    detail.setDishOrder(order);
+                    detail.setDish(dish);
+                    detail.setPrice(dish.getPrice());
+                    detail.setCreatedTime(LocalDateTime.now());
+                    detail.setActive(true);
+                    return detail;
+                })
+                .toList();
+
+        // Step 4: save detail lines mới
+        dishOrderDetailRepository.saveAll(details);
+    }
+}
+```
+
+---
+
+## 5.3.7. `PaymentMethodServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.dto.crud.request.payment_method.PaymentMethodListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.payment_method.PaymentMethodResponseDTO;
+import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
+import com.duyminhdev.cf_manager.mapper.PaymentMethodMapper;
+import com.duyminhdev.cf_manager.service.PaymentMethodService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class PaymentMethodServiceImpl implements PaymentMethodService {
+
+    private final PaymentMethodMapper paymentMethodMapper;
+
+    @Override
+    public List<PaymentMethodResponseDTO> getAll(PaymentMethodListRequestDTO request) {
+        // Step 1: load virtual payment methods từ enum
+        return Arrays.stream(PaymentMethodEnum.values())
+                .filter(item -> request.getActive() == null || item.isActive() == request.getActive())
+                .sorted(Comparator.comparingInt(PaymentMethodEnum::getDisplayOrder))
+                // Step 2: map response
+                .map(paymentMethodMapper::toResponseDTO)
+                .toList();
+    }
+}
+```
+
+---
+
+## 5.3.8. `InvoiceServiceImpl.java`
+
+```java
+package com.duyminhdev.cf_manager.service.impl;
+
+import com.duyminhdev.cf_manager.constant.VnPayConstant;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceConfirmPaymentRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceCountRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceDetailPayloadDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceConfirmPaymentResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceCountResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceResponseDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.entity.Account;
+import com.duyminhdev.cf_manager.entity.Dish;
+import com.duyminhdev.cf_manager.entity.DishOrder;
+import com.duyminhdev.cf_manager.entity.DishOrderStatus;
+import com.duyminhdev.cf_manager.entity.Invoice;
+import com.duyminhdev.cf_manager.entity.InvoiceDetail;
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import com.duyminhdev.cf_manager.enums.DishOrderStatusEnum;
+import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
+import com.duyminhdev.cf_manager.enums.PaymentStatusEnum;
+import com.duyminhdev.cf_manager.mapper.InvoiceDetailPayloadMapper;
+import com.duyminhdev.cf_manager.mapper.InvoiceMapper;
+import com.duyminhdev.cf_manager.repository.DishOrderRepository;
+import com.duyminhdev.cf_manager.repository.InvoiceDetailRepository;
+import com.duyminhdev.cf_manager.repository.InvoiceRepository;
+import com.duyminhdev.cf_manager.repository.impl.NativeSqlDishOrderDetailRepository;
+import com.duyminhdev.cf_manager.repository.impl.NativeSqlInvoiceRepository;
+import com.duyminhdev.cf_manager.service.InvoiceService;
+import com.duyminhdev.cf_manager.service.impl.support.ServiceSupport;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class InvoiceServiceImpl implements InvoiceService {
+
+    private final InvoiceRepository invoiceRepository;
+    private final InvoiceDetailRepository invoiceDetailRepository;
+    private final DishOrderRepository dishOrderRepository;
+    private final NativeSqlDishOrderDetailRepository nativeSqlDishOrderDetailRepository;
+    private final NativeSqlInvoiceRepository nativeSqlInvoiceRepository;
+    private final InvoiceMapper invoiceMapper;
+    private final InvoiceDetailPayloadMapper invoiceDetailPayloadMapper;
+    private final ServiceSupport serviceSupport;
+
+    @Override
+    public InvoiceCountResponseDTO count(InvoiceCountRequestDTO request) {
+        // Step 1: đếm invoice trong ngày
+        long totalInvoicesToday = countInvoicesToday();
+
+        // Step 2: build next invoice code
+        return InvoiceCountResponseDTO.builder()
+                .totalInvoices(totalInvoicesToday)
+                .nextInvoiceCode(generateNextInvoiceCode())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public InvoiceResponseDTO create(InvoiceCreateRequestDTO request) {
+        // Step 1: validate payment method + payment status
+        serviceSupport.validatePaymentMethodCode(request.getPaymentMethod());
+
+        String paymentStatus = request.getPaymentStatus();
+        if (paymentStatus == null || paymentStatus.isBlank()) {
+            paymentStatus = PaymentStatusEnum.PENDING_PAYMENT.getCode();
+        }
+        serviceSupport.validatePaymentStatusCode(paymentStatus);
+
+        // Step 2: resolve table + current account
+        TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+        Account currentAccount = serviceSupport.getCurrentAccount();
+
+        // Step 3: verify total tiền request khớp tổng grouped dishes đang còn hiệu lực checkout
+        validateInvoiceTotal(request.getTableId(), request.getTotalMoney());
+
+        // Step 4: tạo invoice header
+        Invoice invoice = invoiceMapper.toNewEntity(request);
+        invoice.setInvoiceCode(generateNextInvoiceCode());
+        invoice.setTable(table);
+        invoice.setAccount(currentAccount);
+        invoice.setPaymentStatus(paymentStatus);
+        invoice.setPaymentMethod(request.getPaymentMethod());
+        invoice.setCreatedTime(LocalDateTime.now());
+        invoice.setActive(true);
+
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        // Step 5: save invoice detail lines
+        saveInvoiceDetails(savedInvoice, request.getInvoiceDetails());
+
+        // Step 6: nếu thanh toán hoàn tất ngay thì finalize business flow
+        if (PaymentStatusEnum.PAID.getCode().equalsIgnoreCase(paymentStatus)) {
+            finalizeSuccessfulPayment(savedInvoice);
+        }
+
+        // Step 7: map response
+        InvoiceResponseDTO response = invoiceMapper.toResponseDTO(savedInvoice);
+
+        // Step 8: nếu là bank transfer pending thì build VNPay url
+        if (PaymentMethodEnum.BANK_TRANSFER.getCode().equalsIgnoreCase(savedInvoice.getPaymentMethod())
+                && PaymentStatusEnum.PENDING_PAYMENT.getCode().equalsIgnoreCase(savedInvoice.getPaymentStatus())) {
+            response.setUriVnPay(buildVnPayUrl(savedInvoice));
+        }
+
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public InvoiceConfirmPaymentResponseDTO confirmPayment(InvoiceConfirmPaymentRequestDTO request) {
+        // Step 1: validate payment status
+        serviceSupport.validatePaymentStatusCode(request.getPaymentStatus());
+
+        // Step 2: load invoice
+        Invoice invoice = invoiceRepository.findByIdAndActiveTrue(request.getInvoiceId())
+                .orElseThrow(() -> new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
+                        "Invoice not found with id: " + request.getInvoiceId()
+                ));
+
+        // Step 3: update payment status
+        invoice.setPaymentStatus(request.getPaymentStatus());
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        // Step 4: nếu đã paid thì finalize payment flow
+        if (PaymentStatusEnum.PAID.getCode().equalsIgnoreCase(savedInvoice.getPaymentStatus())) {
+            finalizeSuccessfulPayment(savedInvoice);
+        }
+
+        // Step 5: trả response
+        return invoiceMapper.toConfirmPaymentResponseDTO(savedInvoice);
+    }
+
+    @Override
+    public InvoiceDetailResponseDTO detail(InvoiceDetailRequestDTO request) {
+        // Step 1: load full invoice detail rows từ native query
+        List<InvoiceDetailNativeResultDTO> rows = nativeSqlInvoiceRepository.findInvoiceDetailByInvoiceId(request.getInvoiceId());
+        if (rows == null || rows.isEmpty()) {
+            throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
+                    "Invoice detail not found with invoiceId: " + request.getInvoiceId()
+            );
+        }
+
+        // Step 2: map header + line items
+        InvoiceDetailResponseDTO response = invoiceMapper.toDetailResponseDTO(rows);
+
+        // Step 3: nếu là bank transfer pending thì add payment url
+        if (PaymentMethodEnum.BANK_TRANSFER.getCode().equalsIgnoreCase(response.getPaymentMethod())
+                && PaymentStatusEnum.PENDING_PAYMENT.getCode().equalsIgnoreCase(response.getPaymentStatus())) {
+            response.setUriVnPay(buildVnPayUrlByData(
+                    response.getInvoiceId(),
+                    response.getInvoiceCode(),
+                    response.getTotalMoney()
+            ));
+        }
+
+        return response;
+    }
+
+    private void validateInvoiceTotal(Integer tableId, BigDecimal requestTotalMoney) {
+        if (requestTotalMoney == null || requestTotalMoney.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException("totalMoney must be > 0");
+        }
+
+        // Step 1: load grouped dishes đang còn hiệu lực thanh toán của bàn
+        List<DishGroupedByTableNativeResultDTO> groupedDishes = nativeSqlDishOrderDetailRepository.findGroupedByTableId(tableId);
+
+        // Step 2: sum total
+        BigDecimal calculatedTotal = groupedDishes.stream()
+                .map(DishGroupedByTableNativeResultDTO::getTotalPrice)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Step 3: compare với total request
+        if (calculatedTotal.compareTo(requestTotalMoney) != 0) {
+            throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
+                    "Invoice totalMoney does not match aggregated dish total of table"
+            );
+        }
+    }
+
+    private void saveInvoiceDetails(Invoice invoice, List<InvoiceDetailPayloadDTO> payloads) {
+        List<InvoiceDetail> details = payloads.stream()
+                .map(payload -> {
+                    // Step 1: resolve dish active
+                    Dish dish = serviceSupport.getActiveDish(payload.getDishId());
+
+                    // Step 2: map payload -> entity shell
+                    InvoiceDetail detail = invoiceDetailPayloadMapper.toNewEntity(payload);
+
+                    // Step 3: set associations + audit fields
+                    detail.setInvoice(invoice);
+                    detail.setDish(dish);
+                    detail.setCreatedTime(LocalDateTime.now());
+                    detail.setActive(true);
+                    return detail;
+                })
+                .toList();
+
+        // Step 4: save invoice detail lines
+        invoiceDetailRepository.saveAll(details);
+    }
+
+    private void finalizeSuccessfulPayment(Invoice invoice) {
+        // Step 1: load tất cả order unfinished của bàn
+        List<DishOrder> unfinishedOrders = dishOrderRepository.findAllUnfinishedOrdersByTableId(
+                invoice.getTable().getId(),
+                List.of(
+                        DishOrderStatusEnum.CANCELLED.getCode(),
+                        DishOrderStatusEnum.DONE.getCode()
+                )
+        );
+
+        // Step 2: mark unfinished orders -> DONE
+        if (!unfinishedOrders.isEmpty()) {
+            DishOrderStatus completedStatus = serviceSupport.getDishOrderStatusByCode(DishOrderStatusEnum.DONE.getCode());
+            unfinishedOrders.forEach(order -> order.setStatus(completedStatus));
+            dishOrderRepository.saveAll(unfinishedOrders);
+        }
+
+        // Step 3: recompute trạng thái bàn
+        // nếu còn booking upcoming trong 2h -> BOOKED
+        // else -> AVAILABLE
+        serviceSupport.recomputeAndSyncTableStatus(invoice.getTable().getId());
+    }
+
+    private long countInvoicesToday() {
+        LocalDateTime start = LocalDate.now().atStartOfDay();
+        LocalDateTime end = start.plusDays(1).minusNanos(1);
+        return invoiceRepository.countByCreatedTimeBetweenAndActiveTrue(start, end);
+    }
+
+    private String generateNextInvoiceCode() {
+        long countToday = countInvoicesToday() + 1;
+        String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        return "HD-" + date + "-" + String.format("%04d", countToday);
+    }
+
+    private String buildVnPayUrl(Invoice invoice) {
+        return buildVnPayUrlByData(invoice.getId(), invoice.getInvoiceCode(), invoice.getTotalMoney());
+    }
+
+    private String buildVnPayUrlByData(Integer invoiceId, String invoiceCode, BigDecimal totalMoney) {
+        return VnPayConstant.VNPAY_URL
+                + "?invoiceId=" + url(invoiceId)
+                + "&invoiceCode=" + url(invoiceCode)
+                + "&amount=" + url(totalMoney)
+                + "&description=" + url("Thanh toan hoa don " + invoiceCode);
+    }
+
+    private String url(Object value) {
+        return URLEncoder.encode(String.valueOf(value), StandardCharsets.UTF_8);
+    }
+}
+```
+
+---
+
+# 5.4. Business flow mapping sau PHASE 5 final
+
+## TableService
+
+* search overview bàn
+* detail bàn
+* update status bàn
+
+## TableBookingService
+
+* search booking history
+* create/update booking
+* sau mỗi thay đổi booking, **recompute** trạng thái bàn:
+
+  * unfinished order -> `OCCUPIED`
+  * upcoming booking trong 2h -> `BOOKED`
+  * else -> `AVAILABLE`
+
+## DishService / DishCategoryService
+
+* load menu
+* search menu
+* load category active
+
+## DishOrderService
+
+* create/update order
+* snapshot giá món theo `Dish.price` tại thời điểm gọi món
+* sau mỗi thay đổi order, **recompute** trạng thái bàn
+
+## DishOrderDetailService
+
+* list detail của 1 order
+* grouped dishes theo bàn cho checkout
+* grouped query đã loại `CANCELLED` và `DONE`
+
+## PaymentMethodService
+
+* list từ enum ảo
+
+## InvoiceService
+
+* đếm invoice theo ngày để sinh mã `HD-yyyyMMdd-xxxx`
+* verify tổng tiền khớp grouped dishes còn hiệu lực checkout
+* create invoice + invoice detail
+* nếu `PENDING_PAYMENT` và `BANK_TRANSFER` -> build `uriVnPay`
+* nếu `PAID` -> complete toàn bộ order unfinished của bàn, rồi recompute trạng thái bàn
+* detail invoice full để render receipt / QR / redirect
+
+---
+
+# 5.5. Những gì cố ý để ở service, không đẩy sang mapper/controller
+
+* validate booking time
+* resolve current account từ JWT
+* validate status code / payment method code
+* recompute trạng thái bàn theo rule nghiệp vụ
+* verify `totalMoney` invoice
+* mark toàn bộ order unfinished thành `DONE`
+* build `uriVnPay`
+
+Đây là các business rule đúng nghĩa, bám sát service flow cũ. 
+
+---
+
+# 5.6. Ghi chú cuối
+
+## Đã chốt theo yêu cầu của bạn
+
+* **giữ hard delete** trong `replaceOrderDetails(...)`
+* có **TODO comment** để sau này review/refactor sang soft delete
+* refactor rule trạng thái bàn cho sát business hơn
+* thêm comment step trong các flow chính
+
+## Open issue có chủ đích
+
+* chưa chuyển sang soft delete
+* `table/search` vẫn là raw aggregate-oriented ở native layer; business final về status hiện được bảo vệ ở service phase này
+
+Nếu bạn muốn, mình sẽ làm tiếp **PHASE 6 final hoàn chỉnh** sao cho khớp 100% với **PHASE 5 final** ở trên.

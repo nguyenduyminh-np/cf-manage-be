@@ -42,7 +42,7 @@ public class JwtService {
         Map<String, Object> claims = new HashMap<>();
         claims.put("uid", account.getId());
         claims.put("role", account.getRole() != null ? account.getRole().getRoleCode() : "USER");
-        claims.put("status", String.valueOf(account.getIsActive()));
+        claims.put("status", String.valueOf(account.getActive()));
 
         Instant now = Instant.now(clock);
         Instant exp = now.plusSeconds(accessExpiresInSeconds());

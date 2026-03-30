@@ -34,12 +34,8 @@ public class StockTransactionDraftDetail {
     @Column(name = "create_new_batch", nullable = false, columnDefinition = "tinyint(1) DEFAULT 0")
     private Boolean createNewBatch = false;
 
-    @Builder.Default
-    @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
-
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     // VIRTUAL FK: Không có constraint khóa ngoại vật lý trong file SQL
     @ManyToOne(fetch = FetchType.LAZY)

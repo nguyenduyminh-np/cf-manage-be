@@ -32,13 +32,13 @@ public class AccountToken {
 
     @Builder.Default
     @Column(name = "is_revoked", nullable = false, columnDefinition = "tinyint(1) DEFAULT 0")
-    private Boolean isRevoked = false;
+    private Boolean revoked = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime DEFAULT CURRENT_TIMESTAMP")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false, columnDefinition = "datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
-    private LocalDateTime updatedAt;
+    private LocalDateTime updatedTime;
 }

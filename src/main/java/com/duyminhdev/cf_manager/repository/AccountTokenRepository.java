@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface AccountTokenRepository extends JpaRepository<AccountToken, Integer> {
 
-    Optional<AccountToken> findByRefreshTokenAndIsRevokedFalse(String refreshToken);
+    Optional<AccountToken> findByRefreshTokenAndRevokedFalse(String refreshToken);
 
-    Optional<AccountToken> findByAccountAndIsRevokedFalse(Account account);
+    Optional<AccountToken> findByAccountAndRevokedFalse(Account account);
 }

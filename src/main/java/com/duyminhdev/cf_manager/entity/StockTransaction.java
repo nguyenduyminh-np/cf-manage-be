@@ -24,29 +24,29 @@ public class StockTransaction {
     private String transactionType;
 
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 0)
-    private BigDecimal totalAmount;
+    private BigDecimal totalMoney;
 
     @Column(name = "status", nullable = false, length = 100)
     private String status;
 
     @Column(name = "transaction_at")
-    private LocalDateTime transactionAt;
+    private LocalDateTime transactionDate;
     
     // Approval Tracking
     @Column(name = "approved_at")
-    private LocalDateTime approvedAt;
+    private LocalDateTime approvedDate;
     
     @Column(name = "approved_by_account_id") // Lưu ý: Database không set FK cho các cột UserBy này, nên dùng Integer
     private Integer approvedBy;
     
     @Column(name = "completed_at")
-    private LocalDateTime completedAt;
+    private LocalDateTime completedDate;
     
     @Column(name = "completed_by_account_id")
     private Integer completedBy;
     
     @Column(name = "canceled_at")
-    private LocalDateTime canceledAt;
+    private LocalDateTime canceledDate;
     
     @Column(name = "canceled_by_account_id")
     private Integer canceledBy;
@@ -56,11 +56,11 @@ public class StockTransaction {
     private String statusHistory;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false, foreignKey = @ForeignKey(name = "fk_stock_transaction_warehouse_id"))

@@ -17,20 +17,20 @@ public class PurchaseOrder {
     private String purchaseOrderCode;
 
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 0)
-    private BigDecimal totalAmount;
+    private BigDecimal totalPrice;
 
     @Column(name = "payment_status", nullable = false, length = 50)
     private String paymentStatus;
 
     @Column(name = "ordered_at")
-    private LocalDateTime orderedAt;
+    private LocalDateTime orderDate;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_purchase_order_account_id"))

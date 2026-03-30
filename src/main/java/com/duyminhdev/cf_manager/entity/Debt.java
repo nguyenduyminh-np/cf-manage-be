@@ -20,25 +20,25 @@ public class Debt {
     private String debtName;
 
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 0)
-    private BigDecimal totalAmount;
+    private BigDecimal totalMoney;
 
     // Không default
     @Column(name = "is_paid", nullable = false)
-    private Boolean isPaid;
+    private Boolean isPaId;
 
     @Column(name = "paid_at")
-    private LocalDateTime paidAt;
+    private LocalDateTime paIdAt;
 
     @Lob
     @Column(name = "note")
     private String note;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplier_id", nullable = false, foreignKey = @ForeignKey(name = "fk_debt_supplier_id"))

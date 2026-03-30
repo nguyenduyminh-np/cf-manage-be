@@ -24,11 +24,11 @@ public class DishOrderDetail {
     private BigDecimal price;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dish_order_id", nullable = false, foreignKey = @ForeignKey(name = "fk_dish_order_detail_dish_order_id"))

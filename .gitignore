@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+get-spring.py
+.gitignore
+full_project_source.txt

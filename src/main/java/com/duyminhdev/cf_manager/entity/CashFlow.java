@@ -14,7 +14,7 @@ public class CashFlow {
     private Integer id;
 
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 0)
-    private BigDecimal totalAmount;
+    private BigDecimal totalMoney;
 
     @Column(name = "flow_type", nullable = false, length = 255)
     private String flowType;
@@ -23,11 +23,11 @@ public class CashFlow {
     private String note;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_cash_flow_account_id"))

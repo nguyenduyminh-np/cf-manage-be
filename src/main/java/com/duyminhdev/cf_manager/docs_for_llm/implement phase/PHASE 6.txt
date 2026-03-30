@@ -1,0 +1,588 @@
+Bắt đầu **PHASE 6 — Controller layer**.
+
+Phase này mình khóa theo 4 nguyên tắc đã chốt:
+
+* **Tất cả API dùng POST**
+* **Controller chỉ nhận `@Valid @RequestBody`**
+* **Trả về `ApiResponse<T>` hoặc `ApiResponse<PageResponse<T>>`**
+* **Không viết business logic trong controller**, toàn bộ nghiệp vụ đã nằm ở service phase 5.
+  Điều này bám đúng tài liệu DTO architecture và flow service cũ của module TableList.
+
+Ngoài ra, màn hình cũ dùng 16 API cho 4 flow chính: hiển thị bàn, đặt bàn, gọi món, thanh toán. Phase 6 dưới đây map đúng các flow đó nhưng theo convention mới: **POST-only + DTO contract mới**. 
+
+---
+
+# PHASE 6 — CONTROLLER FULL CODE
+
+---
+
+## 6.1. `TableController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/TableController.java`
+
+```java id="z32n5t"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableSearchResponseDTO;
+import com.duyminhdev.cf_manager.service.TableService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/table")
+@RequiredArgsConstructor
+public class TableController {
+
+    private final TableService tableService;
+
+    @PostMapping("/search")
+    public ApiResponse<PageResponse<List<TableSearchResponseDTO>>> search(
+            @Valid @RequestBody TableSearchRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "SEARCH_TABLE_SUCCESS", tableService.search(request));
+    }
+
+    @PostMapping("/detail")
+    public ApiResponse<TableDetailResponseDTO> detail(
+            @Valid @RequestBody TableDetailRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "GET_TABLE_DETAIL_SUCCESS", tableService.detail(request));
+    }
+
+    @PostMapping("/update-status")
+    public ApiResponse<Boolean> updateStatus(
+            @Valid @RequestBody TableStatusUpdateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "UPDATE_TABLE_STATUS_SUCCESS", tableService.updateStatus(request));
+    }
+}
+```
+
+---
+
+## 6.2. `TableBookingController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/TableBookingController.java`
+
+```java id="psuzw8"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.*;
+import com.duyminhdev.cf_manager.dto.crud.response.table_booking.TableBookingResponseDTO;
+import com.duyminhdev.cf_manager.service.TableBookingService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/table-booking")
+@RequiredArgsConstructor
+public class TableBookingController {
+
+    private final TableBookingService tableBookingService;
+
+    @PostMapping("/search")
+    public ApiResponse<PageResponse<List<TableBookingResponseDTO>>> search(
+            @Valid @RequestBody TableBookingSearchRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "SEARCH_TABLE_BOOKING_SUCCESS", tableBookingService.search(request));
+    }
+
+    @PostMapping("/create")
+    public ApiResponse<TableBookingResponseDTO> create(
+            @Valid @RequestBody TableBookingCreateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "CREATE_TABLE_BOOKING_SUCCESS", tableBookingService.create(request));
+    }
+
+    @PostMapping("/update")
+    public ApiResponse<TableBookingResponseDTO> update(
+            @Valid @RequestBody TableBookingUpdateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "UPDATE_TABLE_BOOKING_SUCCESS", tableBookingService.update(request));
+    }
+
+    @PostMapping("/update-status")
+    public ApiResponse<Boolean> updateStatus(
+            @Valid @RequestBody TableBookingStatusUpdateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "UPDATE_TABLE_BOOKING_STATUS_SUCCESS", tableBookingService.updateStatus(request));
+    }
+}
+```
+
+---
+
+## 6.3. `DishController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/DishController.java`
+
+```java id="34dk9v"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish.DishResponseDTO;
+import com.duyminhdev.cf_manager.service.DishService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/dish")
+@RequiredArgsConstructor
+public class DishController {
+
+    private final DishService dishService;
+
+    @PostMapping("/list")
+    public ApiResponse<List<DishResponseDTO>> list(
+            @RequestBody(required = false) DishListRequestDTO request
+    ) {
+        DishListRequestDTO safeRequest = request != null ? request : new DishListRequestDTO();
+        return new ApiResponse<>(200, "GET_DISH_LIST_SUCCESS", dishService.getAll(safeRequest));
+    }
+
+    @PostMapping("/search")
+    public ApiResponse<PageResponse<List<DishResponseDTO>>> search(
+            @Valid @RequestBody DishSearchRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "SEARCH_DISH_SUCCESS", dishService.search(request));
+    }
+}
+```
+
+---
+
+## 6.4. `DishCategoryController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/DishCategoryController.java`
+
+```java id="05fgg6"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_category.DishCategoryListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_category.DishCategoryResponseDTO;
+import com.duyminhdev.cf_manager.service.DishCategoryService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/dish-category")
+@RequiredArgsConstructor
+public class DishCategoryController {
+
+    private final DishCategoryService dishCategoryService;
+
+    @PostMapping("/list")
+    public ApiResponse<List<DishCategoryResponseDTO>> list(
+            @RequestBody(required = false) DishCategoryListRequestDTO request
+    ) {
+        DishCategoryListRequestDTO safeRequest = request != null ? request : new DishCategoryListRequestDTO();
+        return new ApiResponse<>(200, "GET_DISH_CATEGORY_LIST_SUCCESS", dishCategoryService.getAll(safeRequest));
+    }
+}
+```
+
+---
+
+## 6.5. `DishOrderController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/DishOrderController.java`
+
+```java id="q9v6rt"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.*;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.service.DishOrderService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/dish-order")
+@RequiredArgsConstructor
+public class DishOrderController {
+
+    private final DishOrderService dishOrderService;
+
+    @PostMapping("/list-by-table")
+    public ApiResponse<List<DishOrderResponseDTO>> listByTable(
+            @Valid @RequestBody DishOrderListByTableRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "GET_DISH_ORDER_HISTORY_SUCCESS", dishOrderService.listByTable(request));
+    }
+
+    @PostMapping("/create")
+    public ApiResponse<DishOrderResponseDTO> create(
+            @Valid @RequestBody DishOrderCreateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "CREATE_DISH_ORDER_SUCCESS", dishOrderService.create(request));
+    }
+
+    @PostMapping("/update")
+    public ApiResponse<DishOrderResponseDTO> update(
+            @Valid @RequestBody DishOrderUpdateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "UPDATE_DISH_ORDER_SUCCESS", dishOrderService.update(request));
+    }
+
+    @PostMapping("/update-status")
+    public ApiResponse<Boolean> updateStatus(
+            @Valid @RequestBody DishOrderStatusUpdateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "UPDATE_DISH_ORDER_STATUS_SUCCESS", dishOrderService.updateStatus(request));
+    }
+}
+```
+
+---
+
+## 6.6. `DishOrderDetailController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/DishOrderDetailController.java`
+
+```java id="whonrf"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByOrderRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByTableRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishGroupedByTableResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishOrderDetailResponseDTO;
+import com.duyminhdev.cf_manager.service.DishOrderDetailService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/dish-order-detail")
+@RequiredArgsConstructor
+public class DishOrderDetailController {
+
+    private final DishOrderDetailService dishOrderDetailService;
+
+    @PostMapping("/list-by-order")
+    public ApiResponse<List<DishOrderDetailResponseDTO>> listByOrder(
+            @Valid @RequestBody DishOrderDetailListByOrderRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "GET_DISH_ORDER_DETAIL_SUCCESS", dishOrderDetailService.listByOrder(request));
+    }
+
+    @PostMapping("/list-by-table")
+    public ApiResponse<List<DishGroupedByTableResponseDTO>> listByTable(
+            @Valid @RequestBody DishOrderDetailListByTableRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "GET_GROUPED_DISH_BY_TABLE_SUCCESS", dishOrderDetailService.listByTable(request));
+    }
+}
+```
+
+---
+
+## 6.7. `PaymentMethodController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/PaymentMethodController.java`
+
+```java id="z6yv8q"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.payment_method.PaymentMethodListRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.payment_method.PaymentMethodResponseDTO;
+import com.duyminhdev.cf_manager.service.PaymentMethodService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/payment-method")
+@RequiredArgsConstructor
+public class PaymentMethodController {
+
+    private final PaymentMethodService paymentMethodService;
+
+    @PostMapping("/list")
+    public ApiResponse<List<PaymentMethodResponseDTO>> list(
+            @RequestBody(required = false) PaymentMethodListRequestDTO request
+    ) {
+        PaymentMethodListRequestDTO safeRequest = request != null ? request : new PaymentMethodListRequestDTO();
+        return new ApiResponse<>(200, "GET_PAYMENT_METHOD_LIST_SUCCESS", paymentMethodService.getAll(safeRequest));
+    }
+}
+```
+
+---
+
+## 6.8. `InvoiceController.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/controller/InvoiceController.java`
+
+```java id="5evrjg"
+package com.duyminhdev.cf_manager.controller;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.*;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.*;
+import com.duyminhdev.cf_manager.service.InvoiceService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/invoice")
+@RequiredArgsConstructor
+public class InvoiceController {
+
+    private final InvoiceService invoiceService;
+
+    @PostMapping("/count")
+    public ApiResponse<InvoiceCountResponseDTO> count(
+            @RequestBody(required = false) InvoiceCountRequestDTO request
+    ) {
+        InvoiceCountRequestDTO safeRequest = request != null ? request : new InvoiceCountRequestDTO();
+        return new ApiResponse<>(200, "GET_INVOICE_COUNT_SUCCESS", invoiceService.count(safeRequest));
+    }
+
+    @PostMapping("/create")
+    public ApiResponse<InvoiceResponseDTO> create(
+            @Valid @RequestBody InvoiceCreateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "CREATE_INVOICE_SUCCESS", invoiceService.create(request));
+    }
+
+    @PostMapping("/confirm-payment")
+    public ApiResponse<InvoiceConfirmPaymentResponseDTO> confirmPayment(
+            @Valid @RequestBody InvoiceConfirmPaymentRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "CONFIRM_PAYMENT_SUCCESS", invoiceService.confirmPayment(request));
+    }
+
+    @PostMapping("/detail")
+    public ApiResponse<InvoiceDetailResponseDTO> detail(
+            @Valid @RequestBody InvoiceDetailRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "GET_INVOICE_DETAIL_SUCCESS", invoiceService.detail(request));
+    }
+}
+```
+
+---
+
+# 6.9. API mapping cuối cùng sau Phase 6
+
+Dựa trên flow màn hình cũ và service cũ, bộ API mới sau phase này là:
+
+## Table
+
+* `POST /api/v1/table/search`
+* `POST /api/v1/table/detail`
+* `POST /api/v1/table/update-status`
+
+## Table Booking
+
+* `POST /api/v1/table-booking/search`
+* `POST /api/v1/table-booking/create`
+* `POST /api/v1/table-booking/update`
+* `POST /api/v1/table-booking/update-status`
+
+## Dish
+
+* `POST /api/v1/dish/list`
+* `POST /api/v1/dish/search`
+
+## Dish Category
+
+* `POST /api/v1/dish-category/list`
+
+## Dish Order
+
+* `POST /api/v1/dish-order/list-by-table`
+* `POST /api/v1/dish-order/create`
+* `POST /api/v1/dish-order/update`
+* `POST /api/v1/dish-order/update-status`
+
+## Dish Order Detail
+
+* `POST /api/v1/dish-order-detail/list-by-order`
+* `POST /api/v1/dish-order-detail/list-by-table`
+
+## Payment Method
+
+* `POST /api/v1/payment-method/list`
+
+## Invoice
+
+* `POST /api/v1/invoice/count`
+* `POST /api/v1/invoice/create`
+* `POST /api/v1/invoice/confirm-payment`
+* `POST /api/v1/invoice/detail`
+
+Bộ này giữ nguyên semantic của 16 API cũ nhưng đã được chuẩn hóa theo convention POST-only mới của bạn.
+
+---
+
+# 6.10. Patch rất nên làm ngay: validation handler
+
+Hiện `GlobalExceptionHandler` mới có `InvalidDataException`, `DuplicatedUsernameException`, `Exception`, nhưng **chưa có** handler cho `MethodArgumentNotValidException`. Trong khi phase 6 controller đang dùng `@Valid @RequestBody` khá nhiều. Base project hiện đã có `GlobalExceptionHandler`, nên nên patch luôn để validation message trả đẹp. 
+
+## 6.10.1. Patch `GlobalExceptionHandler.java`
+
+```java id="4szl5b"
+package com.duyminhdev.cf_manager.exceptions;
+
+import com.duyminhdev.cf_manager.dto.base.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private ResponseEntity<ErrorResponse> build(
+            HttpStatus status,
+            String code,
+            String message,
+            Object details,
+            HttpServletRequest req) {
+        return ResponseEntity.status(status).body(
+                ErrorResponse.builder()
+                        .timestamp(OffsetDateTime.now())
+                        .status(status.value())
+                        .error(status.getReasonPhrase())
+                        .code(code)
+                        .message(message)
+                        .details(details)
+                        .path(req.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest req) {
+
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+
+        return build(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Request validation failed",
+                fieldErrors,
+                req
+        );
+    }
+
+    @ExceptionHandler(InvalidDataException.class)
+    public ResponseEntity<ErrorResponse> invalidData(
+            InvalidDataException ex,
+            HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST,
+                "INVALID_DATA",
+                ex.getMessage(),
+                null,
+                req);
+    }
+
+    @ExceptionHandler(DuplicatedUsernameException.class)
+    public ResponseEntity<ErrorResponse> duplicatedUsername(
+            DuplicatedUsernameException ex,
+            HttpServletRequest req) {
+        return build(HttpStatus.CONFLICT,
+                "DUPLICATED_USERNAME",
+                ex.getMessage(),
+                null,
+                req);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(
+            Exception ex,
+            HttpServletRequest req) {
+        ex.printStackTrace();
+        return build(HttpStatus.INTERNAL_SERVER_ERROR,
+                "INTERNAL_SERVER_ERROR",
+                "An unexpected error occurred",
+                ex.getMessage(),
+                req);
+    }
+}
+```
+
+---
+
+# 6.11. 3 lưu ý rất quan trọng sau Phase 6
+
+## 1. Các API `list`/`count` đang cho phép body null
+
+Mình cố tình để:
+
+* `DishListRequestDTO`
+* `DishCategoryListRequestDTO`
+* `PaymentMethodListRequestDTO`
+* `InvoiceCountRequestDTO`
+  có thể nhận `null body`, rồi controller tự tạo request mặc định. Điều này giúp frontend gọi nhẹ hơn.
+
+## 2. Security hiện tại không cần sửa route whitelist
+
+Các controller mới không cần whitelist, vì nghiệp vụ table/booking/order/payment đều phải qua JWT. `SecurityConfig` hiện đang để mọi route ngoài `/api/v1/auth/**` đều authenticated, phù hợp với bài toán này. 
+
+## 3. Controller chỉ orchestration, không chứa business
+
+Điều này bám đúng tài liệu DTO architecture và service explain cũ:
+
+* validation rìa ở request DTO
+* orchestration ở controller
+* nghiệp vụ ở service
+* data access ở repository/spec/native repository.
+
+---
+
+# Kết quả sau Phase 6
+
+Sau phase này bạn đã có:
+
+* đủ **8 controller**
+* đủ route POST cho toàn bộ module TableList
+* response bọc `ApiResponse<T>`
+* controller/service/repository/DTO/mapping được nối hoàn chỉnh theo kiến trúc đã chốt
+
+Bước tiếp theo hợp lý nhất là **PHASE 7 — rà compile/runtime issues + patch các điểm lệch giữa Phase 1→6 để code build sạch**.

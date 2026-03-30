@@ -12,7 +12,7 @@ import java.time.OffsetDateTime;
 @Builder
 public class ErrorResponse {
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    // @JsonFormat(shape = JsonFormat.Shape.STRING)
     private OffsetDateTime timestamp;
     private int status;
     private String error;

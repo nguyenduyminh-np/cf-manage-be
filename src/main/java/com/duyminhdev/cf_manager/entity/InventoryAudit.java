@@ -17,7 +17,7 @@ public class InventoryAudit {
     private String auditCode;
 
     @Column(name = "audit_at", nullable = false)
-    private LocalDateTime auditAt;
+    private LocalDateTime auditDate;
 
     @Column(name = "auditor", nullable = false, length = 255)
     private String auditor;
@@ -26,11 +26,11 @@ public class InventoryAudit {
     private String note;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false, foreignKey = @ForeignKey(name = "fk_inventory_audit_warehouse_id"))

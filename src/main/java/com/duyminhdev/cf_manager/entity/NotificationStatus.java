@@ -21,8 +21,8 @@ public class NotificationStatus {
     private String description;
 
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Column(name = "is_active")
-    private Boolean isActive;
+    private Boolean active;
 }

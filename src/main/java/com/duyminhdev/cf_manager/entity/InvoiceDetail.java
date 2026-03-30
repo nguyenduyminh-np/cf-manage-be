@@ -20,11 +20,11 @@ public class InvoiceDetail {
     private BigDecimal unitPrice;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     // Bảng này trong DB KHÔNG có DEFAULT 1
     @Column(name = "is_active", nullable = false)
-    private Boolean isActive;
+    private Boolean active;
 
     // VIRTUAL FK: SQL không hề có ALTER TABLE ... ADD CONSTRAINT cho InvoiceDetail
     @ManyToOne(fetch = FetchType.LAZY)

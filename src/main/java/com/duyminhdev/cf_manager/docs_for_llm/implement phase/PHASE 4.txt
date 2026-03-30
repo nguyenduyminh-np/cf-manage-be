@@ -1,0 +1,779 @@
+Bắt đầu **PHASE 4 — Mapper layer + mapping strategy**.
+
+Phase này mình bám 3 nguyên tắc:
+
+* DTO architecture yêu cầu **không map thủ công trong service**, nên phase này phải dựng **MapStruct mapper interfaces** rõ ràng. 
+* Service cũ cho thấy nhiều nghiệp vụ là **business-driven mapping**: ví dụ tạo order thì đổi trạng thái bàn sang `OCCUPIED`, thanh toán xong thì hoàn tất các order và trả bàn về `AVAILABLE`. Những phần đó **không được nhét vào mapper**, mà để service xử lý ở Phase 5. 
+* Project hiện là **Spring Boot 3.5.12 + Java 21**, nhưng `pom.xml` hiện chưa có MapStruct dependency, nên để phase này compile được thật thì cần patch `pom.xml` trước. 
+
+---
+
+# PHASE 4 — MAPPER FULL CODE
+
+---
+
+## 4.0. Patch `pom.xml` để dùng MapStruct
+
+Tài liệu DTO architecture nói rõ là không viết block kiểu `dto.setName(entity.getName())` trong service, mà phải dùng mapper interface riêng. Vì `pom.xml` hiện chỉ có Lombok, JPA, Security, Validation mà **chưa có MapStruct**, Phase 4 cần thêm dependency + annotation processor.
+
+## 4.0.1. Thêm dependencies
+
+```xml id="hgxjhr"
+<dependency>
+    <groupId>org.mapstruct</groupId>
+    <artifactId>mapstruct</artifactId>
+    <version>1.5.5.Final</version>
+</dependency>
+```
+
+## 4.0.2. Sửa `maven-compiler-plugin`
+
+```xml id="vzj18r"
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <configuration>
+        <annotationProcessorPaths>
+            <path>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+            </path>
+            <path>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok-mapstruct-binding</artifactId>
+                <version>0.2.0</version>
+            </path>
+            <path>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>1.5.5.Final</version>
+            </path>
+        </annotationProcessorPaths>
+    </configuration>
+</plugin>
+```
+
+---
+
+# 4.1. Base Mapper Config
+
+## 4.1.1. `BaseMapperConfig.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/BaseMapperConfig.java`
+
+```java id="qae0fd"
+package com.duyminhdev.cf_manager.mapper;
+
+import org.mapstruct.MapperConfig;
+import org.mapstruct.MappingInheritanceStrategy;
+import org.mapstruct.NullValueCheckStrategy;
+import org.mapstruct.NullValuePropertyMappingStrategy;
+import org.mapstruct.ReportingPolicy;
+
+@MapperConfig(
+        componentModel = "spring",
+        unmappedTargetPolicy = ReportingPolicy.IGNORE,
+        nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS,
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE,
+        mappingInheritanceStrategy = MappingInheritanceStrategy.AUTO_INHERIT_ALL_FROM_CONFIG
+)
+public interface BaseMapperConfig {
+}
+```
+
+### Ý nghĩa
+
+* `componentModel = "spring"` để inject mapper vào service/controller.
+* `unmappedTargetPolicy = IGNORE` giúp phase đầu không bị compile fail vì field chưa dùng.
+* `nullValuePropertyMappingStrategy = IGNORE` rất hợp cho các DTO update.
+  Cách tách `BaseMapperConfig` như vậy bám đúng kiến trúc DTO/mapping có trách nhiệm rõ ràng. 
+
+---
+
+# 4.2. Enum Display Mapper
+
+Mapper này dùng để:
+
+* map code trong DB sang `displayName`
+* tránh viết `switch/case` lặp lại trong service
+* nhưng **không quyết định business rule**, chỉ transform dữ liệu hiển thị.
+  Điều này khớp với service cũ: logic đổi trạng thái bàn/order/invoice thuộc service, còn phần hiển thị tên trạng thái nên để mapper xử lý. 
+
+## 4.2.1. `EnumDisplayMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/EnumDisplayMapper.java`
+
+```java id="p1a8kl"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
+import com.duyminhdev.cf_manager.enums.DishOrderStatusEnum;
+import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
+import com.duyminhdev.cf_manager.enums.PaymentStatusEnum;
+import com.duyminhdev.cf_manager.enums.TableStatusEnum;
+import org.mapstruct.Named;
+import org.springframework.stereotype.Component;
+
+@Component
+public class EnumDisplayMapper {
+
+    @Named("toTableStatusName")
+    public String toTableStatusName(String code) {
+        return safeResolveTableStatus(code);
+    }
+
+    @Named("toBookingStatusName")
+    public String toBookingStatusName(String code) {
+        return safeResolveBookingStatus(code);
+    }
+
+    @Named("toDishOrderStatusName")
+    public String toDishOrderStatusName(String code) {
+        return safeResolveDishOrderStatus(code);
+    }
+
+    @Named("toPaymentStatusName")
+    public String toPaymentStatusName(String code) {
+        return safeResolvePaymentStatus(code);
+    }
+
+    @Named("toPaymentMethodName")
+    public String toPaymentMethodName(String code) {
+        return safeResolvePaymentMethod(code);
+    }
+
+    private String safeResolveTableStatus(String code) {
+        try {
+            return code == null ? null : TableStatusEnum.fromCode(code).getDisplayName();
+        } catch (Exception ex) {
+            return code;
+        }
+    }
+
+    private String safeResolveBookingStatus(String code) {
+        try {
+            return code == null ? null : BookingStatusEnum.fromCode(code).getDisplayName();
+        } catch (Exception ex) {
+            return code;
+        }
+    }
+
+    private String safeResolveDishOrderStatus(String code) {
+        try {
+            return code == null ? null : DishOrderStatusEnum.fromCode(code).getDisplayName();
+        } catch (Exception ex) {
+            return code;
+        }
+    }
+
+    private String safeResolvePaymentStatus(String code) {
+        try {
+            return code == null ? null : PaymentStatusEnum.fromCode(code).getDisplayName();
+        } catch (Exception ex) {
+            return code;
+        }
+    }
+
+    private String safeResolvePaymentMethod(String code) {
+        try {
+            return code == null ? null : PaymentMethodEnum.fromCode(code).getDisplayName();
+        } catch (Exception ex) {
+            return code;
+        }
+    }
+}
+```
+
+---
+
+# 4.3. Table Mapper
+
+Flow cũ yêu cầu list bàn trả thêm `status`, `totalBookingToday`, `latestBookingTime`; còn detail thì chỉ là định danh bàn. Mapper của module table sẽ có 2 hướng:
+
+* entity -> detail response
+* native result -> search response
+  Phần “xác định trạng thái OCCUPIED/BOOKED/AVAILABLE theo thời gian thực” vẫn để service, không để mapper.
+
+## 4.3.1. `TableMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/TableMapper.java`
+
+```java id="w5g5gj"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table.TableSearchResponseDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(config = BaseMapperConfig.class, uses = EnumDisplayMapper.class)
+public interface TableMapper {
+
+    @Mapping(target = "tableId", source = "id")
+    @Mapping(target = "tableStatusName", source = "tableStatus", qualifiedByName = "toTableStatusName")
+    TableDetailResponseDTO toDetailResponseDTO(TableEntity entity);
+
+    @Mapping(target = "tableStatusName", source = "tableStatus", qualifiedByName = "toTableStatusName")
+    TableSearchResponseDTO toSearchResponseDTO(TableSearchNativeResultDTO source);
+}
+```
+
+---
+
+# 4.4. Table Booking Mapper
+
+Service cũ của booking cho thấy:
+
+* create/update booking có validation, lookup bàn, check thời gian, gán account từ token
+* response cần đầy đủ tên bàn, người lập phiếu, trạng thái hiển thị
+  Vì vậy mapper booking nên:
+* map request -> entity phần field primitive
+* service tự set `table`, `account`, `createdTime`, business validation
+* map entity -> response đầy đủ nested info.
+
+## 4.4.1. `TableBookingMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/TableBookingMapper.java`
+
+```java id="1qri84"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.table_booking.TableBookingResponseDTO;
+import com.duyminhdev.cf_manager.entity.TableBooking;
+import org.mapstruct.*;
+
+@Mapper(config = BaseMapperConfig.class, uses = EnumDisplayMapper.class)
+public interface TableBookingMapper {
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "table", ignore = true)
+    @Mapping(target = "account", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "checkinTime", ignore = true)
+    TableBooking toNewEntity(TableBookingCreateRequestDTO request);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "table", ignore = true)
+    @Mapping(target = "account", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "checkinTime", ignore = true)
+    void updateEntityFromRequest(TableBookingUpdateRequestDTO request, @MappingTarget TableBooking entity);
+
+    @Mapping(target = "bookingId", source = "id")
+    @Mapping(target = "tableId", source = "table.id")
+    @Mapping(target = "tableCode", source = "table.tableCode")
+    @Mapping(target = "tableName", source = "table.tableName")
+    @Mapping(target = "checkInTime", source = "checkinTime")
+    @Mapping(target = "bookingStatusName", source = "bookingStatus", qualifiedByName = "toBookingStatusName")
+    @Mapping(target = "accountId", source = "account.id")
+    @Mapping(target = "accountUsername", source = "account.username")
+    @Mapping(target = "accountFullName", source = "account.fullName")
+    TableBookingResponseDTO toResponseDTO(TableBooking entity);
+}
+```
+
+---
+
+# 4.5. Dish Mapper
+
+Dish và DishCategory là dữ liệu menu/master đơn giản. Service cũ mô tả rất rõ:
+
+* chỉ lấy món active
+* search theo tên/mã món
+* category active để filter tab
+  Mapper phần này khá thẳng.
+
+## 4.5.1. `DishMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/DishMapper.java`
+
+```java id="de4dwj"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.response.dish.DishResponseDTO;
+import com.duyminhdev.cf_manager.entity.Dish;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(config = BaseMapperConfig.class)
+public interface DishMapper {
+
+    @Mapping(target = "dishId", source = "id")
+    @Mapping(target = "dishCategoryId", source = "dishCategory.id")
+    @Mapping(target = "dishCategoryCode", source = "dishCategory.dishCategoryCode")
+    @Mapping(target = "dishCategoryName", source = "dishCategory.dishCateogryName")
+    DishResponseDTO toResponseDTO(Dish entity);
+}
+```
+
+---
+
+# 4.6. Dish Category Mapper
+
+## 4.6.1. `DishCategoryMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/DishCategoryMapper.java`
+
+```java id="25j3ts"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.response.dish_category.DishCategoryResponseDTO;
+import com.duyminhdev.cf_manager.entity.DishCategory;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(config = BaseMapperConfig.class)
+public interface DishCategoryMapper {
+
+    @Mapping(target = "dishCategoryId", source = "id")
+    @Mapping(target = "dishCategoryName", source = "dishCateogryName")
+    DishCategoryResponseDTO toResponseDTO(DishCategory entity);
+}
+```
+
+---
+
+# 4.7. Dish Order Mapper
+
+Service cũ của order cho thấy:
+
+* create/update order là business flow nặng: tạo order mới, set bàn sang `OCCUPIED`, map giá món tại thời điểm gọi, xử lý danh sách detail
+* mapper chỉ nên lo:
+
+  * entity -> response
+  * request primitive -> shell entity
+* association `table`, `account`, `status` và list details vẫn do service gán sau khi lookup DB.
+
+## 4.7.1. `DishOrderMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/DishOrderMapper.java`
+
+```java id="b3i557"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.entity.DishOrder;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(config = BaseMapperConfig.class, uses = EnumDisplayMapper.class)
+public interface DishOrderMapper {
+
+    @Mapping(target = "dishOrderId", source = "id")
+    @Mapping(target = "tableId", source = "table.id")
+    @Mapping(target = "tableCode", source = "table.tableCode")
+    @Mapping(target = "tableName", source = "table.tableName")
+    @Mapping(target = "accountId", source = "account.id")
+    @Mapping(target = "accountUsername", source = "account.username")
+    @Mapping(target = "accountFullName", source = "account.fullName")
+    @Mapping(target = "dishOrderStatusId", source = "status.id")
+    @Mapping(target = "dishOrderStatus", source = "status.dishOrderStatusCode")
+    @Mapping(target = "dishOrderStatusName", source = "status.dishOrderStatusCode", qualifiedByName = "toDishOrderStatusName")
+    DishOrderResponseDTO toResponseDTO(DishOrder entity);
+}
+```
+
+---
+
+# 4.8. Dish Order Detail Mapper
+
+Flow cũ yêu cầu:
+
+* xem chi tiết từng order
+* gom nhóm món theo bàn để checkout
+* create/update detail khi lưu order
+  Nên mapper này cần 3 nhóm:
+
+1. payload -> entity shell
+2. entity -> detail response
+3. native grouped result -> grouped response.
+
+## 4.8.1. `DishOrderDetailMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/DishOrderDetailMapper.java`
+
+```java id="4g4kcb"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish_order.DishOrderDetailPayloadDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishGroupedByTableResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishOrderDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
+import com.duyminhdev.cf_manager.entity.DishOrderDetail;
+import org.mapstruct.*;
+
+@Mapper(config = BaseMapperConfig.class)
+public interface DishOrderDetailMapper {
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "dishOrder", ignore = true)
+    @Mapping(target = "dish", ignore = true)
+    @Mapping(target = "price", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    DishOrderDetail toNewEntity(DishOrderDetailPayloadDTO request);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "dishOrder", ignore = true)
+    @Mapping(target = "dish", ignore = true)
+    @Mapping(target = "price", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    void updateEntityFromPayload(DishOrderDetailPayloadDTO request, @MappingTarget DishOrderDetail entity);
+
+    @Mapping(target = "dishOrderDetailId", source = "id")
+    @Mapping(target = "dishOrderId", source = "dishOrder.id")
+    @Mapping(target = "dishId", source = "dish.id")
+    @Mapping(target = "dishCode", source = "dish.dishCode")
+    @Mapping(target = "dishName", source = "dish.dishName")
+    @Mapping(target = "dishPhoto", source = "dish.photo")
+    @Mapping(target = "totalPrice", expression = "java(entity.getPrice() != null && entity.getQuantity() != null ? entity.getPrice().multiply(java.math.BigDecimal.valueOf(entity.getQuantity())) : null)")
+    DishOrderDetailResponseDTO toResponseDTO(DishOrderDetail entity);
+
+    DishGroupedByTableResponseDTO toGroupedResponseDTO(DishGroupedByTableNativeResultDTO source);
+}
+```
+
+---
+
+# 4.9. Payment Method Mapper
+
+Payment method là module ảo Java, không có bảng vật lý; service cũ yêu cầu chỉ cần list methods như Cash, Transfer, Card, VNPay... Mapper module này chủ yếu map từ `PaymentMethodEnum` sang response DTO.
+
+## 4.9.1. `PaymentMethodMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/PaymentMethodMapper.java`
+
+```java id="7lcxo2"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.response.payment_method.PaymentMethodResponseDTO;
+import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
+import org.mapstruct.Mapper;
+
+import java.util.Arrays;
+import java.util.List;
+
+@Mapper(config = BaseMapperConfig.class)
+public interface PaymentMethodMapper {
+
+    default PaymentMethodResponseDTO toResponseDTO(PaymentMethodEnum source) {
+        if (source == null) {
+            return null;
+        }
+
+        return PaymentMethodResponseDTO.builder()
+                .code(source.getCode())
+                .name(source.getDisplayName())
+                .active(source.isActive())
+                .displayOrder(source.getDisplayOrder())
+                .build();
+    }
+
+    default List<PaymentMethodResponseDTO> toResponseDTOList(PaymentMethodEnum[] sources) {
+        if (sources == null) {
+            return List.of();
+        }
+
+        return Arrays.stream(sources)
+                .map(this::toResponseDTO)
+                .toList();
+    }
+}
+```
+
+---
+
+# 4.10. Invoice Line Mapper
+
+Invoice detail full cần tách riêng line mapper, vì tài liệu DTO architecture yêu cầu không trộn raw DB result DTO với response DTO frontend.
+
+## 4.10.1. `InvoiceLineMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/InvoiceLineMapper.java`
+
+```java id="8ckr8e"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceLineResponseDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.entity.InvoiceDetail;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(config = BaseMapperConfig.class)
+public interface InvoiceLineMapper {
+
+    @Mapping(target = "invoiceDetailId", source = "id")
+    @Mapping(target = "dishId", source = "dish.id")
+    @Mapping(target = "dishCode", source = "dish.dishCode")
+    @Mapping(target = "dishName", source = "dish.dishName")
+    @Mapping(target = "lineTotal", expression = "java(entity.getUnitPrice() != null && entity.getQuantity() != null ? entity.getUnitPrice().multiply(java.math.BigDecimal.valueOf(entity.getQuantity())) : null)")
+    InvoiceLineResponseDTO toResponseDTO(InvoiceDetail entity);
+
+    InvoiceLineResponseDTO toResponseDTO(InvoiceDetailNativeResultDTO source);
+}
+```
+
+---
+
+# 4.11. Invoice Detail Payload Mapper
+
+Service cũ cho thấy create invoice cần:
+
+* tạo header invoice
+* lặp từng line invoice detail
+* confirm payment tùy payment status
+  Mapper payload này chỉ lo map line primitive -> entity shell. Việc verify `totalMoney` khớp aggregated dishes và set `invoice`, `dish`, `createdTime`, `active` vẫn là business logic ở service. 
+
+## 4.11.1. `InvoiceDetailPayloadMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/InvoiceDetailPayloadMapper.java`
+
+```java id="4j2jyw"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceDetailPayloadDTO;
+import com.duyminhdev.cf_manager.entity.InvoiceDetail;
+import org.mapstruct.*;
+
+@Mapper(config = BaseMapperConfig.class)
+public interface InvoiceDetailPayloadMapper {
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "invoice", ignore = true)
+    @Mapping(target = "dish", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    InvoiceDetail toNewEntity(InvoiceDetailPayloadDTO request);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "invoice", ignore = true)
+    @Mapping(target = "dish", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    void updateEntityFromPayload(InvoiceDetailPayloadDTO request, @MappingTarget InvoiceDetail entity);
+}
+```
+
+---
+
+# 4.12. Invoice Mapper
+
+Đây là mapper quan trọng nhất của phase này, vì service cũ mô tả 3 nhánh:
+
+* generate next invoice code
+* create/update invoice
+* get full invoice detail
+  Mapper module invoice nên có:
+
+1. request -> entity shell
+2. entity -> `InvoiceResponseDTO`
+3. native result list -> `InvoiceDetailResponseDTO` đầy đủ header + lines
+   Phần đổi trạng thái các order thành `COMPLETED` và trả bàn về `AVAILABLE` vẫn là service logic.
+
+## 4.12.1. `InvoiceMapper.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/mapper/InvoiceMapper.java`
+
+```java id="65uhny"
+package com.duyminhdev.cf_manager.mapper;
+
+import com.duyminhdev.cf_manager.dto.crud.request.invoice.InvoiceCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceConfirmPaymentResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceLineResponseDTO;
+import com.duyminhdev.cf_manager.dto.crud.response.invoice.InvoiceResponseDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.entity.Invoice;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Mapper(config = BaseMapperConfig.class, uses = {EnumDisplayMapper.class, InvoiceLineMapper.class})
+public abstract class InvoiceMapper {
+
+    @Autowired
+    protected InvoiceLineMapper invoiceLineMapper;
+
+    @Autowired
+    protected EnumDisplayMapper enumDisplayMapper;
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "invoiceCode", ignore = true)
+    @Mapping(target = "account", ignore = true)
+    @Mapping(target = "table", ignore = true)
+    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "totalGuest", source = "guestCount")
+    public abstract Invoice toNewEntity(InvoiceCreateRequestDTO request);
+
+    @Mapping(target = "invoiceId", source = "id")
+    @Mapping(target = "tableId", source = "table.id")
+    @Mapping(target = "tableCode", source = "table.tableCode")
+    @Mapping(target = "tableName", source = "table.tableName")
+    @Mapping(target = "accountId", source = "account.id")
+    @Mapping(target = "accountUsername", source = "account.username")
+    @Mapping(target = "accountFullName", source = "account.fullName")
+    @Mapping(target = "paymentStatusName", source = "paymentStatus", qualifiedByName = "toPaymentStatusName")
+    @Mapping(target = "paymentMethodName", source = "paymentMethod", qualifiedByName = "toPaymentMethodName")
+    @Mapping(target = "guestCount", source = "totalGuest")
+    public abstract InvoiceResponseDTO toResponseDTO(Invoice entity);
+
+    public InvoiceConfirmPaymentResponseDTO toConfirmPaymentResponseDTO(Invoice entity) {
+        if (entity == null) {
+            return null;
+        }
+
+        return InvoiceConfirmPaymentResponseDTO.builder()
+                .invoiceId(entity.getId())
+                .invoiceCode(entity.getInvoiceCode())
+                .paymentStatus(entity.getPaymentStatus())
+                .paymentStatusName(enumDisplayMapper.toPaymentStatusName(entity.getPaymentStatus()))
+                .build();
+    }
+
+    public InvoiceDetailResponseDTO toDetailResponseDTO(List<InvoiceDetailNativeResultDTO> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+
+        InvoiceDetailNativeResultDTO first = rows.getFirst();
+
+        List<InvoiceLineResponseDTO> lineItems = new ArrayList<>();
+        for (InvoiceDetailNativeResultDTO row : rows) {
+            if (row.getInvoiceDetailId() != null) {
+                lineItems.add(invoiceLineMapper.toResponseDTO(row));
+            }
+        }
+
+        return InvoiceDetailResponseDTO.builder()
+                .invoiceId(first.getInvoiceId())
+                .invoiceCode(first.getInvoiceCode())
+                .tableId(first.getTableId())
+                .tableCode(first.getTableCode())
+                .tableName(first.getTableName())
+                .accountId(first.getAccountId())
+                .accountUsername(first.getAccountUsername())
+                .accountFullName(first.getAccountFullName())
+                .paymentStatus(first.getPaymentStatus())
+                .paymentStatusName(enumDisplayMapper.toPaymentStatusName(first.getPaymentStatus()))
+                .paymentMethod(first.getPaymentMethod())
+                .paymentMethodName(enumDisplayMapper.toPaymentMethodName(first.getPaymentMethod()))
+                .guestCount(first.getGuestCount())
+                .totalMoney(first.getTotalMoney())
+                .createdTime(first.getCreatedTime())
+                .invoiceDetails(lineItems)
+                .build();
+    }
+}
+```
+
+---
+
+# 4.13. Mapper responsibility matrix
+
+Để bạn dễ bám service phase sau, đây là cách dùng từng mapper:
+
+## Table
+
+* `TableMapper`
+
+  * `TableEntity -> TableDetailResponseDTO`
+  * `TableSearchNativeResultDTO -> TableSearchResponseDTO`
+
+## TableBooking
+
+* `TableBookingMapper`
+
+  * `TableBookingCreateRequestDTO -> TableBooking`
+  * `TableBookingUpdateRequestDTO -> update @MappingTarget TableBooking`
+  * `TableBooking -> TableBookingResponseDTO`
+
+## Dish / DishCategory
+
+* `DishMapper`
+* `DishCategoryMapper`
+
+## DishOrder
+
+* `DishOrderMapper`
+
+  * `DishOrder -> DishOrderResponseDTO`
+
+## DishOrderDetail
+
+* `DishOrderDetailMapper`
+
+  * payload -> entity shell
+  * entity -> `DishOrderDetailResponseDTO`
+  * native aggregate -> `DishGroupedByTableResponseDTO`
+
+## PaymentMethod
+
+* `PaymentMethodMapper`
+
+  * `PaymentMethodEnum -> PaymentMethodResponseDTO`
+
+## Invoice
+
+* `InvoiceDetailPayloadMapper`
+
+  * payload -> `InvoiceDetail`
+* `InvoiceLineMapper`
+
+  * `InvoiceDetail` / native row -> line DTO
+* `InvoiceMapper`
+
+  * request -> `Invoice`
+  * `Invoice -> InvoiceResponseDTO`
+  * native rows -> `InvoiceDetailResponseDTO`
+
+---
+
+# 4.14. Những gì mapper KHÔNG được làm
+
+Theo service cũ, các logic sau **không được nhét vào mapper**:
+
+* kiểm tra booking time có trong quá khứ không
+* tìm bàn có tồn tại không
+* resolve account hiện tại từ JWT
+* đổi trạng thái bàn sang `OCCUPIED`
+* khi hủy / hoàn thành order thì xét có trả bàn về `AVAILABLE` không
+* verify tổng tiền invoice có khớp aggregated dishes theo bàn không
+* thanh toán xong thì update tất cả order và bàn
+  Đây đều là **business logic service layer**, không phải DTO mapping. 
+
+---
+
+# 4.15. Kết quả của Phase 4
+
+Sau phase này bạn sẽ có:
+
+* cấu hình MapStruct
+* mapper config chung
+* mapper hiển thị enum
+* mapper cho từng domain chính
+* mapper riêng cho native result DTO
+* mapper riêng cho payload create/update
+
+Điểm quan trọng là phase này đã bám đúng:
+
+* DTO separation rules của tài liệu DTO architecture 
+* flow service cũ của module TableList business 
+* entity/security/base wrappers hiện có của project 
+* 16 API nghiệp vụ của màn hình cũ 
+
+Bước tiếp theo hợp lý nhất là **PHASE 5 — Service interfaces + ServiceImpl code chi tiết**.

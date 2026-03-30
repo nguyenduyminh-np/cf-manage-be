@@ -17,7 +17,7 @@ public class Invoice {
     private String invoiceCode;
 
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 0)
-    private BigDecimal totalAmount;
+    private BigDecimal totalMoney;
 
     @Column(name = "payment_status", nullable = false, length = 50)
     private String paymentStatus;
@@ -27,14 +27,14 @@ public class Invoice {
 
     @Builder.Default
     @Column(name = "guest_count", columnDefinition = "int DEFAULT 1")
-    private Integer guestCount = 1;
+    private Integer totalGuest = 1;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_invoice_account_id"))

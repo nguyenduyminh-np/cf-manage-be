@@ -2,6 +2,7 @@ package com.duyminhdev.cf_manager.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,14 +16,13 @@ public class DishCategory {
     @Column(name = "dish_category_code", length = 255)
     private String dishCategoryCode;
 
-    // Giữ nguyên typo từ SQL gốc
     @Column(name = "dish_category_name", nullable = false, length = 100)
     private String dishCategoryName;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
+    private Boolean active = true;
 }

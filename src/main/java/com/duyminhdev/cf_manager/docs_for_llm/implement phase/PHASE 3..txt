@@ -1,0 +1,1082 @@
+Bắt đầu **PHASE 3**.
+Phase này mình chốt theo đúng 2 pattern bạn đã yêu cầu:
+
+* **JPA Criteria** cho search CRUD/filter động, với whitelist sort field và escape `LIKE` an toàn. 
+* **Native Query** cho các API aggregate/join nặng như list bàn có metadata booking, grouped dish theo bàn, invoice detail.
+
+Mình cũng bám đúng flow nghiệp vụ cũ:
+
+* list bàn cần `totalBooking`, `lastBookingTime` → nên native query. 
+* grouped dish theo bàn để thanh toán → nên native query. 
+* booking search / dish search → phù hợp JPA Criteria. 
+
+---
+
+# PHASE 3 — REPOSITORY + SPEC + NATIVE REPOSITORY
+
+---
+
+## 3.1. Standard Repository Interfaces
+
+## 3.1.1. `TableRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/TableRepository.java`
+
+```java id="p5v0e3"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.TableEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface TableRepository extends JpaRepository<TableEntity, Integer> {
+
+    Optional<TableEntity> findByIdAndActiveTrue(Integer id);
+
+    List<TableEntity> findAllByActiveTrueOrderByFloorAscSlotAscIdAsc();
+
+    boolean existsByIdAndActiveTrue(Integer id);
+}
+```
+
+---
+
+## 3.1.2. `TableBookingRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/TableBookingRepository.java`
+
+```java id="uk4m5i"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.TableBooking;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface TableBookingRepository extends JpaRepository<TableBooking, Integer>, JpaSpecificationExecutor<TableBooking> {
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    Optional<TableBooking> findByIdAndActiveTrue(Integer id);
+
+    boolean existsByIdAndActiveTrue(Integer id);
+}
+```
+
+---
+
+## 3.1.3. `DishRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/DishRepository.java`
+
+```java id="owuw3p"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.Dish;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface DishRepository extends JpaRepository<Dish, Integer>, JpaSpecificationExecutor<Dish> {
+
+    Optional<Dish> findByIdAndActiveTrue(Integer id);
+
+    List<Dish> findAllByActiveTrueOrderByDishNameAsc();
+}
+```
+
+---
+
+## 3.1.4. `DishCategoryRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/DishCategoryRepository.java`
+
+```java id="bt50qz"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.DishCategory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface DishCategoryRepository extends JpaRepository<DishCategory, Integer> {
+
+    List<DishCategory> findAllByActiveTrueOrderByDishCategoryNameAsc();
+}
+```
+
+> Lưu ý: entity đã được sửa trường name thành `dishCategoryName` cho đúng chuẩn. 
+
+---
+
+## 3.1.5. `DishOrderRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/DishOrderRepository.java`
+
+```java id="b5j2e3"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.DishOrder;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface DishOrderRepository extends JpaRepository<DishOrder, Integer> {
+
+    @EntityGraph(attributePaths = {"table", "account", "status"})
+    List<DishOrder> findAllByTableIdAndActiveTrueOrderByCreatedTimeDesc(Integer tableId);
+
+    @EntityGraph(attributePaths = {"table", "account", "status"})
+    Optional<DishOrder> findByIdAndActiveTrue(Integer id);
+}
+```
+
+---
+
+## 3.1.6. `DishOrderDetailRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/DishOrderDetailRepository.java`
+
+```java id="44xujt"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.DishOrderDetail;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface DishOrderDetailRepository extends JpaRepository<DishOrderDetail, Integer> {
+
+    @EntityGraph(attributePaths = {"dishOrder", "dish"})
+    List<DishOrderDetail> findAllByDishOrderIdAndActiveTrueOrderByCreatedTimeAsc(Integer dishOrderId);
+
+    void deleteAllByDishOrderId(Integer dishOrderId);
+}
+```
+
+---
+
+## 3.1.7. `DishOrderStatusRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/DishOrderStatusRepository.java`
+
+```java id="8a5jom"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.DishOrderStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface DishOrderStatusRepository extends JpaRepository<DishOrderStatus, Integer> {
+
+    Optional<DishOrderStatus> findByDishOrderStatusCode(String dishOrderStatusCode);
+}
+```
+
+---
+
+## 3.1.8. `InvoiceRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/InvoiceRepository.java`
+
+```java id="6jk0fq"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.Invoice;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    Optional<Invoice> findByIdAndActiveTrue(Integer id);
+
+    long countByActiveTrue();
+}
+```
+
+---
+
+## 3.1.9. `InvoiceDetailRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/InvoiceDetailRepository.java`
+
+```java id="91cnp6"
+package com.duyminhdev.cf_manager.repository;
+
+import com.duyminhdev.cf_manager.entity.InvoiceDetail;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface InvoiceDetailRepository extends JpaRepository<InvoiceDetail, Integer> {
+
+    @EntityGraph(attributePaths = {"invoice", "dish"})
+    List<InvoiceDetail> findAllByInvoiceId(Integer invoiceId);
+}
+```
+
+---
+
+# 3.2. Specification Classes
+
+Tài liệu JPA Criteria nhấn mạnh:
+
+* filter động bằng `CriteriaBuilder`
+* escape `LIKE`
+* sort field phải whitelist
+* count/data query cần dùng cùng predicate logic. 
+
+Với approach hiện tại, mình dùng `Specification<T>` + helper resolve `Sort` an toàn.
+Service phase sau sẽ gọi:
+
+* `TableBookingRepository.findAll(spec, pageable)`
+* `DishRepository.findAll(spec, pageable)`
+
+---
+
+## 3.2.1. `TableBookingSpec.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/spec/TableBookingSpec.java`
+
+```java id="37e0ku"
+package com.duyminhdev.cf_manager.repository.spec;
+
+import com.duyminhdev.cf_manager.dto.crud.request.table_booking.TableBookingSearchRequestDTO;
+import com.duyminhdev.cf_manager.entity.TableBooking;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.StringUtils;
+
+import java.util.*;
+
+public final class TableBookingSpec {
+
+    private TableBookingSpec() {
+    }
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id",
+            "bookingTime",
+            "checkInTime",
+            "bookingStatus",
+            "customerName",
+            "phoneNumber",
+            "deposit",
+            "createdTime"
+    );
+
+    public static Specification<TableBooking> byCriteria(TableBookingSearchRequestDTO request) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (request.getTableId() != null) {
+                predicates.add(cb.equal(root.get("table").get("id"), request.getTableId()));
+            }
+
+            if (StringUtils.hasText(request.getBookingStatus())) {
+                predicates.add(cb.equal(
+                        cb.upper(root.get("bookingStatus")),
+                        request.getBookingStatus().trim().toUpperCase()
+                ));
+            }
+
+            if (StringUtils.hasText(request.getCustomerName())) {
+                String value = escapeLike(request.getCustomerName().trim().toLowerCase()) + "%";
+                predicates.add(cb.like(cb.lower(root.get("customerName")), value, '\\'));
+            }
+
+            if (StringUtils.hasText(request.getPhoneNumber())) {
+                String value = escapeLike(request.getPhoneNumber().trim().toLowerCase()) + "%";
+                predicates.add(cb.like(cb.lower(root.get("phoneNumber")), value, '\\'));
+            }
+
+            if (request.getBookingFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("bookingTime"), request.getBookingFrom()));
+            }
+
+            if (request.getBookingTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("bookingTime"), request.getBookingTo()));
+            }
+
+            if (request.getActive() != null) {
+                predicates.add(cb.equal(root.get("active"), request.getActive()));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    public static Sort resolveSort(String sortField, String sortDir) {
+        String resolvedField = ALLOWED_SORT_FIELDS.contains(sortField) ? sortField : "id";
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, resolvedField);
+    }
+
+    private static String escapeLike(String input) {
+        return input
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+}
+```
+
+---
+
+## 3.2.2. `DishSpec.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/spec/DishSpec.java`
+
+```java id="lt2pw0"
+package com.duyminhdev.cf_manager.repository.spec;
+
+import com.duyminhdev.cf_manager.dto.crud.request.dish.DishSearchRequestDTO;
+import com.duyminhdev.cf_manager.entity.Dish;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.StringUtils;
+
+import java.util.*;
+
+public final class DishSpec {
+
+    private DishSpec() {
+    }
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id",
+            "dishCode",
+            "dishName",
+            "price",
+            "createdTime"
+    );
+
+    public static Specification<Dish> byCriteria(DishSearchRequestDTO request) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (StringUtils.hasText(request.getKeyword())) {
+                String value = escapeLike(request.getKeyword().trim().toLowerCase()) + "%";
+                predicates.add(
+                        cb.or(
+                                cb.like(cb.lower(root.get("dishName")), value, '\\'),
+                                cb.like(cb.lower(root.get("dishCode")), value, '\\')
+                        )
+                );
+            }
+
+            if (request.getDishCategoryId() != null) {
+                predicates.add(cb.equal(root.get("dishCategory").get("id"), request.getDishCategoryId()));
+            }
+
+            if (request.getActive() != null) {
+                predicates.add(cb.equal(root.get("active"), request.getActive()));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    public static Sort resolveSort(String sortField, String sortDir) {
+        String resolvedField = ALLOWED_SORT_FIELDS.contains(sortField) ? sortField : "id";
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, resolvedField);
+    }
+
+    private static String escapeLike(String input) {
+        return input
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+}
+```
+
+---
+
+# 3.3. Native Query Helper
+
+Tài liệu Native Query yêu cầu:
+
+* dùng **named parameters**
+* không concat trực tiếp input vào SQL
+* map kết quả qua alias bằng `Tuple`
+* `ORDER BY` phải whitelist riêng. 
+
+Để tránh lặp code, tạo helper nhỏ.
+
+## 3.3.1. `NativeSqlTupleUtils.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlTupleUtils.java`
+
+```java id="fhopn0"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import jakarta.persistence.Tuple;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+
+public final class NativeSqlTupleUtils {
+
+    private NativeSqlTupleUtils() {
+    }
+
+    public static String getString(Tuple tuple, String alias) {
+        Object value = tuple.get(alias);
+        return value != null ? value.toString() : null;
+    }
+
+    public static Integer getInteger(Tuple tuple, String alias) {
+        Object value = tuple.get(alias);
+        return value != null ? ((Number) value).intValue() : null;
+    }
+
+    public static Long getLong(Tuple tuple, String alias) {
+        Object value = tuple.get(alias);
+        return value != null ? ((Number) value).longValue() : null;
+    }
+
+    public static BigDecimal getBigDecimal(Tuple tuple, String alias) {
+        Object value = tuple.get(alias);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal bigDecimal) {
+            return bigDecimal;
+        }
+        return new BigDecimal(value.toString());
+    }
+
+    public static Boolean getBoolean(Tuple tuple, String alias) {
+        Object value = tuple.get(alias);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        return Boolean.parseBoolean(value.toString());
+    }
+
+    public static LocalDateTime getLocalDateTime(Tuple tuple, String alias) {
+        Object value = tuple.get(alias);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime;
+        }
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        return null;
+    }
+
+    public static String escapeLike(String input) {
+        return input
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+}
+```
+
+---
+
+# 3.4. Native Repository — Table Search
+
+List bàn là API aggregate, cần `totalBooking` và `lastBookingTime`, nên native query là hợp lý hơn Criteria/spec.
+
+## 3.4.1. `NativeSqlTableRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlTableRepository.java`
+
+```java id="nbbq2v"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+
+import java.util.List;
+
+public interface NativeSqlTableRepository {
+
+    PageResponse<List<TableSearchNativeResultDTO>> search(TableSearchRequestDTO request);
+}
+```
+
+---
+
+## 3.4.2. `NativeSqlTableRepositoryImpl.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlTableRepositoryImpl.java`
+
+```java id="yi7j74"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.crud.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.utils.PageUtils;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+import org.springframework.util.StringUtils;
+
+import java.util.*;
+
+@Repository
+@RequiredArgsConstructor
+public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
+
+    @PersistenceContext
+    private final EntityManager entityManager;
+
+    private static final String SELECT_COLUMNS = """
+            SELECT
+                dt.id AS tableId,
+                dt.table_code AS tableCode,
+                dt.table_name AS tableName,
+                dt.table_status AS tableStatus,
+                dt.floor AS floor,
+                dt.slot AS slot,
+                COALESCE(COUNT(tb.id), 0) AS totalBooking,
+                MAX(tb.booking_at) AS lastBookingTime,
+                dt.is_active AS active
+            """;
+
+    private static final String FROM_WHERE = """
+            FROM dining_table dt
+            LEFT JOIN table_booking tb
+                ON tb.dining_table_id = dt.id
+               AND (tb.is_active = 1 OR tb.is_active = true)
+            WHERE 1 = 1
+            """;
+
+    private static final String GROUP_BY = """
+            GROUP BY
+                dt.id,
+                dt.table_code,
+                dt.table_name,
+                dt.table_status,
+                dt.floor,
+                dt.slot,
+                dt.is_active
+            """;
+
+    @Override
+    public PageResponse<List<TableSearchNativeResultDTO>> search(TableSearchRequestDTO request) {
+        int pageNo = PageUtils.normalizePage(request.getPage());
+        int pageSize = PageUtils.normalizeLimit(request.getLimit());
+
+        Map<String, Object> params = new HashMap<>();
+        String whereClause = buildWhere(request, params);
+        String orderBy = buildOrderBy(request.getSortField(), request.getSortDir());
+
+        String dataSql = SELECT_COLUMNS + FROM_WHERE + whereClause + GROUP_BY + orderBy;
+
+        Query dataQuery = entityManager.createNativeQuery(dataSql, Tuple.class);
+        params.forEach(dataQuery::setParameter);
+        dataQuery.setFirstResult(pageNo * pageSize);
+        dataQuery.setMaxResults(pageSize);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = dataQuery.getResultList();
+
+        List<TableSearchNativeResultDTO> data = tuples.stream()
+                .map(this::mapTupleToDto)
+                .toList();
+
+        long totalElements = countTotalElements(request);
+        int totalPages = PageUtils.calculateTotalPages(totalElements, pageSize);
+
+        PageResponse<List<TableSearchNativeResultDTO>> response = new PageResponse<>();
+        response.setData(data);
+        response.setPageNo(pageNo);
+        response.setPageSize(pageSize);
+        response.setTotalElements((int) totalElements);
+        response.setTotalPages(totalPages);
+        return response;
+    }
+
+    private long countTotalElements(TableSearchRequestDTO request) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT COUNT(1)
+                FROM dining_table dt
+                WHERE 1 = 1
+                """);
+
+        Map<String, Object> params = new HashMap<>();
+        sql.append(buildCountWhere(request, params));
+
+        Query countQuery = entityManager.createNativeQuery(sql.toString());
+        params.forEach(countQuery::setParameter);
+
+        Object result = countQuery.getSingleResult();
+        return ((Number) result).longValue();
+    }
+
+    private String buildWhere(TableSearchRequestDTO request, Map<String, Object> params) {
+        StringBuilder sql = new StringBuilder();
+
+        if (StringUtils.hasText(request.getKeyword())) {
+            sql.append("""
+                     AND (
+                        LOWER(dt.table_code) LIKE :keyword ESCAPE '\\'
+                        OR LOWER(dt.table_name) LIKE :keyword ESCAPE '\\'
+                     )
+                    """);
+            params.put("keyword", NativeSqlTupleUtils.escapeLike(request.getKeyword().trim().toLowerCase()) + "%");
+        }
+
+        if (request.getFloor() != null) {
+            sql.append(" AND dt.floor = :floor ");
+            params.put("floor", request.getFloor());
+        }
+
+        if (request.getSlot() != null) {
+            sql.append(" AND dt.slot = :slot ");
+            params.put("slot", request.getSlot());
+        }
+
+        if (StringUtils.hasText(request.getTableStatus())) {
+            sql.append(" AND UPPER(dt.table_status) = :tableStatus ");
+            params.put("tableStatus", request.getTableStatus().trim().toUpperCase());
+        }
+
+        if (request.getActive() != null) {
+            sql.append(" AND dt.is_active = :active ");
+            params.put("active", request.getActive());
+        }
+
+        return sql.toString();
+    }
+
+    private String buildCountWhere(TableSearchRequestDTO request, Map<String, Object> params) {
+        StringBuilder sql = new StringBuilder();
+
+        if (StringUtils.hasText(request.getKeyword())) {
+            sql.append("""
+                     AND (
+                        LOWER(dt.table_code) LIKE :keyword ESCAPE '\\'
+                        OR LOWER(dt.table_name) LIKE :keyword ESCAPE '\\'
+                     )
+                    """);
+            params.put("keyword", NativeSqlTupleUtils.escapeLike(request.getKeyword().trim().toLowerCase()) + "%");
+        }
+
+        if (request.getFloor() != null) {
+            sql.append(" AND dt.floor = :floor ");
+            params.put("floor", request.getFloor());
+        }
+
+        if (request.getSlot() != null) {
+            sql.append(" AND dt.slot = :slot ");
+            params.put("slot", request.getSlot());
+        }
+
+        if (StringUtils.hasText(request.getTableStatus())) {
+            sql.append(" AND UPPER(dt.table_status) = :tableStatus ");
+            params.put("tableStatus", request.getTableStatus().trim().toUpperCase());
+        }
+
+        if (request.getActive() != null) {
+            sql.append(" AND dt.is_active = :active ");
+            params.put("active", request.getActive());
+        }
+
+        return sql.toString();
+    }
+
+    private String buildOrderBy(String sortField, String sortDir) {
+        String dbColumn = mapSortFieldToDbColumn(sortField);
+        String direction = "asc".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
+        return " ORDER BY " + (dbColumn != null ? dbColumn : "dt.id") + " " + direction + " ";
+    }
+
+    private String mapSortFieldToDbColumn(String sortField) {
+        if (sortField == null || sortField.isBlank()) {
+            return null;
+        }
+
+        return switch (sortField) {
+            case "tableCode" -> "dt.table_code";
+            case "tableName" -> "dt.table_name";
+            case "tableStatus" -> "dt.table_status";
+            case "floor" -> "dt.floor";
+            case "slot" -> "dt.slot";
+            case "totalBooking" -> "totalBooking";
+            case "lastBookingTime" -> "lastBookingTime";
+            case "id" -> "dt.id";
+            default -> null;
+        };
+    }
+
+    private TableSearchNativeResultDTO mapTupleToDto(Tuple tuple) {
+        return TableSearchNativeResultDTO.builder()
+                .tableId(NativeSqlTupleUtils.getInteger(tuple, "tableId"))
+                .tableCode(NativeSqlTupleUtils.getString(tuple, "tableCode"))
+                .tableName(NativeSqlTupleUtils.getString(tuple, "tableName"))
+                .tableStatus(NativeSqlTupleUtils.getString(tuple, "tableStatus"))
+                .floor(NativeSqlTupleUtils.getInteger(tuple, "floor"))
+                .slot(NativeSqlTupleUtils.getInteger(tuple, "slot"))
+                .totalBooking(NativeSqlTupleUtils.getInteger(tuple, "totalBooking"))
+                .lastBookingTime(NativeSqlTupleUtils.getLocalDateTime(tuple, "lastBookingTime"))
+                .active(NativeSqlTupleUtils.getBoolean(tuple, "active"))
+                .build();
+    }
+}
+```
+
+---
+
+# 3.5. Native Repository — Grouped Dish by Table
+
+Tài liệu cũ mô tả rõ API lấy tổng hợp các món theo bàn để thanh toán. Đây là aggregate query, rất hợp native.
+
+## 3.5.1. `NativeSqlDishOrderDetailRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlDishOrderDetailRepository.java`
+
+```java id="o4mcbt"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
+
+import java.util.List;
+
+public interface NativeSqlDishOrderDetailRepository {
+
+    List<DishGroupedByTableNativeResultDTO> findGroupedByTableId(Integer tableId);
+}
+```
+
+---
+
+## 3.5.2. `NativeSqlDishOrderDetailRepositoryImpl.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlDishOrderDetailRepositoryImpl.java`
+
+```java id="tx0jaa"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+@RequiredArgsConstructor
+public class NativeSqlDishOrderDetailRepositoryImpl implements NativeSqlDishOrderDetailRepository {
+
+    @PersistenceContext
+    private final EntityManager entityManager;
+
+    @Override
+    public List<DishGroupedByTableNativeResultDTO> findGroupedByTableId(Integer tableId) {
+        String sql = """
+                SELECT
+                    d.id AS dishId,
+                    d.dish_code AS dishCode,
+                    d.dish_name AS dishName,
+                    d.photo AS dishPhoto,
+                    SUM(dod.quantity) AS totalQuantity,
+                    dod.price AS unitPrice,
+                    SUM(dod.quantity * dod.price) AS totalPrice
+                FROM dish_order_detail dod
+                INNER JOIN dish_order do1
+                    ON do1.id = dod.dish_order_id
+                INNER JOIN dish d
+                    ON d.id = dod.dish_id
+                LEFT JOIN dish_order_status dos
+                    ON dos.id = do1.dish_order_status_id
+                WHERE do1.dining_table_id = :tableId
+                  AND (do1.is_active = 1 OR do1.is_active = true)
+                  AND (dod.is_active = 1 OR dod.is_active = true)
+                  AND (d.is_active = 1 OR d.is_active = true)
+                  AND (
+                        dos.dish_order_status_code IS NULL
+                        OR UPPER(dos.dish_order_status_code) <> 'CANCEL'
+                  )
+                GROUP BY
+                    d.id,
+                    d.dish_code,
+                    d.dish_name,
+                    d.photo,
+                    dod.price
+                ORDER BY d.dish_name ASC
+                """;
+
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        query.setParameter("tableId", tableId);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+
+        return tuples.stream()
+                .map(this::mapTupleToDto)
+                .toList();
+    }
+
+    private DishGroupedByTableNativeResultDTO mapTupleToDto(Tuple tuple) {
+        return DishGroupedByTableNativeResultDTO.builder()
+                .dishId(NativeSqlTupleUtils.getInteger(tuple, "dishId"))
+                .dishCode(NativeSqlTupleUtils.getString(tuple, "dishCode"))
+                .dishName(NativeSqlTupleUtils.getString(tuple, "dishName"))
+                .dishPhoto(NativeSqlTupleUtils.getString(tuple, "dishPhoto"))
+                .totalQuantity(NativeSqlTupleUtils.getInteger(tuple, "totalQuantity"))
+                .unitPrice(NativeSqlTupleUtils.getBigDecimal(tuple, "unitPrice"))
+                .totalPrice(NativeSqlTupleUtils.getBigDecimal(tuple, "totalPrice"))
+                .build();
+    }
+}
+```
+
+---
+
+# 3.6. Native Repository — Invoice Detail
+
+Tài liệu cũ có flow `invoice detail` sau khi tạo hóa đơn. Phase 2 mình đã tạo `InvoiceDetailNativeResultDTO`, nên phase 3 nên có native repository tương ứng để tránh phase sau phải quay lại vá. 
+
+## 3.6.1. `NativeSqlInvoiceRepository.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlInvoiceRepository.java`
+
+```java id="cufvt4"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+
+import java.util.List;
+
+public interface NativeSqlInvoiceRepository {
+
+    List<InvoiceDetailNativeResultDTO> findInvoiceDetailByInvoiceId(Integer invoiceId);
+}
+```
+
+---
+
+## 3.6.2. `NativeSqlInvoiceRepositoryImpl.java`
+
+**Path:** `src/main/java/com/duyminhdev/cf_manager/repository/impl/NativeSqlInvoiceRepositoryImpl.java`
+
+```java id="v51ezz"
+package com.duyminhdev.cf_manager.repository.impl;
+
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+@RequiredArgsConstructor
+public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepository {
+
+    @PersistenceContext
+    private final EntityManager entityManager;
+
+    @Override
+    public List<InvoiceDetailNativeResultDTO> findInvoiceDetailByInvoiceId(Integer invoiceId) {
+        String sql = """
+                SELECT
+                    i.id AS invoiceId,
+                    i.invoice_code AS invoiceCode,
+                    dt.id AS tableId,
+                    dt.table_code AS tableCode,
+                    dt.table_name AS tableName,
+                    a.id AS accountId,
+                    a.username AS accountUsername,
+                    a.full_name AS accountFullName,
+                    i.payment_status AS paymentStatus,
+                    i.payment_method AS paymentMethod,
+                    i.guest_count AS guestCount,
+                    i.total_amount AS totalMoney,
+                    i.created_at AS createdTime,
+                    idt.id AS invoiceDetailId,
+                    d.id AS dishId,
+                    d.dish_code AS dishCode,
+                    d.dish_name AS dishName,
+                    idt.quantity AS quantity,
+                    idt.unit_price AS unitPrice,
+                    (idt.quantity * idt.unit_price) AS lineTotal
+                FROM invoice i
+                INNER JOIN dining_table dt
+                    ON dt.id = i.dining_table_id
+                INNER JOIN account a
+                    ON a.id = i.account_id
+                LEFT JOIN invoice_detail idt
+                    ON idt.invoice_id = i.id
+                LEFT JOIN dish d
+                    ON d.id = idt.dish_id
+                WHERE i.id = :invoiceId
+                ORDER BY idt.id ASC
+                """;
+
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        query.setParameter("invoiceId", invoiceId);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+
+        return tuples.stream()
+                .map(this::mapTupleToDto)
+                .toList();
+    }
+
+    private InvoiceDetailNativeResultDTO mapTupleToDto(Tuple tuple) {
+        return InvoiceDetailNativeResultDTO.builder()
+                .invoiceId(NativeSqlTupleUtils.getInteger(tuple, "invoiceId"))
+                .invoiceCode(NativeSqlTupleUtils.getString(tuple, "invoiceCode"))
+                .tableId(NativeSqlTupleUtils.getInteger(tuple, "tableId"))
+                .tableCode(NativeSqlTupleUtils.getString(tuple, "tableCode"))
+                .tableName(NativeSqlTupleUtils.getString(tuple, "tableName"))
+                .accountId(NativeSqlTupleUtils.getInteger(tuple, "accountId"))
+                .accountUsername(NativeSqlTupleUtils.getString(tuple, "accountUsername"))
+                .accountFullName(NativeSqlTupleUtils.getString(tuple, "accountFullName"))
+                .paymentStatus(NativeSqlTupleUtils.getString(tuple, "paymentStatus"))
+                .paymentMethod(NativeSqlTupleUtils.getString(tuple, "paymentMethod"))
+                .guestCount(NativeSqlTupleUtils.getInteger(tuple, "guestCount"))
+                .totalMoney(NativeSqlTupleUtils.getBigDecimal(tuple, "totalMoney"))
+                .createdTime(NativeSqlTupleUtils.getLocalDateTime(tuple, "createdTime"))
+                .invoiceDetailId(NativeSqlTupleUtils.getInteger(tuple, "invoiceDetailId"))
+                .dishId(NativeSqlTupleUtils.getInteger(tuple, "dishId"))
+                .dishCode(NativeSqlTupleUtils.getString(tuple, "dishCode"))
+                .dishName(NativeSqlTupleUtils.getString(tuple, "dishName"))
+                .quantity(NativeSqlTupleUtils.getInteger(tuple, "quantity"))
+                .unitPrice(NativeSqlTupleUtils.getBigDecimal(tuple, "unitPrice"))
+                .lineTotal(NativeSqlTupleUtils.getBigDecimal(tuple, "lineTotal"))
+                .build();
+    }
+}
+```
+
+---
+
+# 3.7. Repository usage map theo API
+
+## Dùng JPA Criteria / Standard Repository
+
+* `POST /api/v1/table-booking/search`
+
+  * `TableBookingRepository`
+  * `TableBookingSpec`
+* `POST /api/v1/dish/search`
+
+  * `DishRepository`
+  * `DishSpec`
+* `POST /api/v1/dish/list`
+
+  * `DishRepository`
+* `POST /api/v1/dish-category/list`
+
+  * `DishCategoryRepository`
+* `POST /api/v1/dish-order/list-by-table`
+
+  * `DishOrderRepository`
+* `POST /api/v1/dish-order-detail/list-by-order`
+
+  * `DishOrderDetailRepository`
+* `POST /api/v1/invoice/count`
+
+  * `InvoiceRepository`
+* create/update entities
+
+  * standard repositories tương ứng
+
+## Dùng Native Query
+
+* `POST /api/v1/table/search`
+
+  * `NativeSqlTableRepository`
+* `POST /api/v1/dish-order-detail/list-by-table`
+
+  * `NativeSqlDishOrderDetailRepository`
+* `POST /api/v1/invoice/detail`
+
+  * `NativeSqlInvoiceRepository`
+
+Cách tách này đúng với 2 tài liệu search strategy bạn gửi: filter CRUD dùng Criteria, aggregate/join nặng dùng Native.
+
+---
+
+# 3.8. 3 lưu ý rất quan trọng trước khi sang service
+
+## 1. `PageResponse.totalElements` hiện là `int`
+
+Native count hiện trả `long`, nhưng DTO base hiện đang để `int totalElements`. Trong code trên mình cast về `int` để bám base hiện tại. Nếu số lượng dữ liệu lớn về sau, nên cân nhắc đổi sang `long`. Hiện tại mình giữ nguyên để bám contract base sẵn có. 
+
+## 2. `DishOrderStatusRepository.findByDishOrderStatusCode(...)`
+
+Điểm này bám đúng entity `DishOrderStatus` hiện có field `dishOrderStatusCode`, không dùng `roleName` hay `displayName`. 
+
+## 3. `NativeSqlDishOrderDetailRepository` đang loại `CANCELLED`
+
+Đây là lựa chọn hợp lý theo nghiệp vụ thanh toán: món của order đã hủy thì không nên đi vào invoice tổng hợp. Nếu business của bạn khác, chỉ cần nới filter ở đây. Luồng cũ mô tả rõ có hành động huỷ order và có tổng hợp món để thanh toán theo bàn. 
+
+---
+
+# Kết thúc Phase 3
+
+Phase 3 giờ đã đủ nền cho Phase 4:
+
+* repository chuẩn
+* specification
+* native repository cho aggregate
+* tuple mapping helper
+* sort whitelist
+* named parameter native query
+
+Bước tiếp theo nên đi thẳng vào **PHASE 4 — Mapper interfaces + mapping strategy code chi tiết** để Phase 5 service không bị lẫn logic map DTO/entity/result.

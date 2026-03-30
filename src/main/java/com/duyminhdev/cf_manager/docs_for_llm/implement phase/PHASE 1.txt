@@ -1,0 +1,689 @@
+PHASE 1:
+4 nguyên tắc đã chốt:
+
+* project đang ở **Spring Boot 3.5.12 + Java 21** nên Phase 1 không cần đổi `pom.xml` nền. 
+* response vẫn phải bọc bằng `ApiResponse<T>` / `PageResponse<T>` theo `dto/base` đang có.
+* DTO phải tách `crud/request`, `crud/response`, `db_result/native_sql`, không dùng chung request và response. 
+* search về sau sẽ tách rõ **JPA Criteria** cho filter CRUD và **Native Query** cho aggregate/join nặng.
+
+Trong tin này, mình đưa **Phase 1 full code**:
+**entity patch + enums + constants + utility nền**.
+Đây là phase phải làm trước để các phase repository / DTO / service phía sau cắm vào được.
+
+---
+
+# PHASE 1 — ENTITY PATCH + ENUMS + CONSTANTS + COMMON UTILS
+
+## 1.1. Patch `TableEntity.java`
+
+Bạn đã chốt thêm `floor`, `seat`, `slot`. Flow cũ cũng cần lọc bàn theo tầng, số người, trạng thái bàn.
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/entity/TableEntity.java`
+
+```java
+package com.duyminhdev.cf_manager.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "dining_table")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TableEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
+    private Integer id;
+
+    @Column(name = "table_code", length = 255)
+    private String tableCode;
+
+    @Column(name = "table_name", nullable = false, length = 255)
+    private String tableName;
+
+    /**
+     * Lưu code trạng thái bàn trong DB.
+     * Ví dụ: AVAILABLE / BOOKED / OCCUPIED
+     */
+    @Column(name = "table_status", nullable = false, length = 255)
+    private String tableStatus;
+
+    @Column(name = "floor")
+    private Integer floor;
+
+    /**
+     * Sức chứa bàn, user đã chốt DB đã có và hiện giá trị là 4.
+     */
+    @Column(name = "seat")
+    private Integer seat;
+
+    /**
+     * Slot hiển thị / thứ tự / phân vùng bàn theo DB mới.
+     */
+    @Column(name = "slot")
+    private Integer slot;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdTime;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean active;
+}
+```
+
+### Ghi chú triển khai
+
+* `tableStatus` vẫn để `String` ở entity để bám DB hiện tại.
+* Enum sẽ map ở service/mapper, không ép entity đổi sang `@Enumerated` ngay từ đầu để tránh phát sinh mismatch DB không cần thiết.
+* `seat` và `slot` để kiểu `Integer` cho an toàn nullability khi dữ liệu cũ chưa backfill đủ.
+
+---
+
+## 1.2. Patch `TableBooking.java`
+
+Flow booking cũ có `note`, `bookingTime`, `customerName`, `phoneNumber`, `deposit`, `bookingStatus`.
+
+Bạn chưa paste entity `TableBooking` trong log đầu, nhưng theo plan thì file này cần patch thêm `note`.
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/entity/TableBooking.java`
+
+```java
+package com.duyminhdev.cf_manager.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "table_booking")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TableBooking {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
+    private Integer id;
+
+    @Column(name = "booking_at", nullable = false)
+    private LocalDateTime bookingTime;
+
+    @Column(name = "check_in_at")
+    private LocalDateTime checkInTime;
+
+    /**
+     * Lưu code trạng thái booking trong DB.
+     * Ví dụ: PENDING_CONFIRMATION / CONFIRMED / CANCELLED / COMPLETED
+     */
+    @Column(name = "booking_status", nullable = false, length = 255)
+    private String bookingStatus;
+
+    @Column(name = "deposit_amount", precision = 18, scale = 0)
+    private BigDecimal deposit;
+
+    @Column(name = "customer_name", length = 255)
+    private String customerName;
+
+    @Column(name = "phone_number", length = 50)
+    private String phoneNumber;
+
+    @Column(name = "note", length = 255)
+    private String note;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdTime;
+
+    @Builder.Default
+    @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
+    private Boolean active = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_account_id"))
+    private Account account;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dining_table_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_dining_table_id"))
+    private TableEntity table;
+}
+```
+
+### Ghi chú
+
+* Nếu entity hiện tại của bạn đã có hầu hết field này, chỉ cần thêm riêng `note`.
+* Tên cột đang bám đúng logic từ tài liệu cũ.
+
+---
+
+## 1.3. Tạo package `enums`
+
+Tài liệu cũ mô tả rõ trạng thái bàn, booking, order, payment. Việc đưa về enum giúp giữ nguyên nghiệp vụ nhưng giảm hard-code string rải rác.
+
+## 1.3.1. `TableStatusEnum.java`
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/enums/TableStatusEnum.java`
+
+```java
+package com.duyminhdev.cf_manager.enums;
+
+import lombok.Getter;
+
+import java.util.Arrays;
+
+@Getter
+public enum TableStatusEnum {
+
+    AVAILABLE("AVAILABLE", "Bàn trống"),
+    BOOKED("BOOKED", "Đã đặt"),
+    OCCUPIED("OCCUPIED", "Đang sử dụng");
+
+    private final String code;
+    private final String displayName;
+
+    TableStatusEnum(String code, String displayName) {
+        this.code = code;
+        this.displayName = displayName;
+    }
+
+    public static TableStatusEnum fromCode(String code) {
+        return Arrays.stream(values())
+                .filter(item -> item.code.equalsIgnoreCase(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid table status code: " + code));
+    }
+
+    public static boolean isValidCode(String code) {
+        return Arrays.stream(values())
+                .anyMatch(item -> item.code.equalsIgnoreCase(code));
+    }
+}
+```
+
+---
+
+## 1.3.2. `BookingStatusEnum.java`
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/enums/BookingStatusEnum.java`
+
+```java
+package com.duyminhdev.cf_manager.enums;
+
+import lombok.Getter;
+
+import java.util.Arrays;
+
+@Getter
+public enum BookingStatusEnum {
+
+    PENDING_CONFIRMATION("PENDING_CONFIRMATION", "Chờ xác nhận"),
+    CONFIRMED("CONFIRMED", "Đã xác nhận"),
+    CANCELLED("CANCELLED", "Đã huỷ"),
+    COMPLETED("COMPLETED", "Hoàn thành");
+
+    private final String code;
+    private final String displayName;
+
+    BookingStatusEnum(String code, String displayName) {
+        this.code = code;
+        this.displayName = displayName;
+    }
+
+    public static BookingStatusEnum fromCode(String code) {
+        return Arrays.stream(values())
+                .filter(item -> item.code.equalsIgnoreCase(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid booking status code: " + code));
+    }
+
+    public static boolean isValidCode(String code) {
+        return Arrays.stream(values())
+                .anyMatch(item -> item.code.equalsIgnoreCase(code));
+    }
+}
+```
+
+---
+
+## 1.3.3. `DishOrderStatusEnum.java`
+
+Flow cũ dùng `Processing`, `Done`, `Cancel`; mình normalize code để service sạch hơn. Sau này map sang `dish_order_status` table qua `dishOrderStatusCode`. 
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/enums/DishOrderStatusEnum.java`
+
+```java
+package com.duyminhdev.cf_manager.enums;
+
+import lombok.Getter;
+
+import java.util.Arrays;
+
+@Getter
+public enum DishOrderStatusEnum {
+
+    PROCESSING("PROCESSING", "Đang xử lý"),
+    DONE("DONE", "Hoàn thành"),
+    CANCELLED("CANCELLED", "Đã huỷ");
+
+    private final String code;
+    private final String displayName;
+
+    DishOrderStatusEnum(String code, String displayName) {
+        this.code = code;
+        this.displayName = displayName;
+    }
+
+    public static DishOrderStatusEnum fromCode(String code) {
+        return Arrays.stream(values())
+                .filter(item -> item.code.equalsIgnoreCase(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid dish order status code: " + code));
+    }
+
+    public static boolean isValidCode(String code) {
+        return Arrays.stream(values())
+                .anyMatch(item -> item.code.equalsIgnoreCase(code));
+    }
+}
+```
+
+---
+
+## 1.3.4. `PaymentStatusEnum.java`
+
+Flow cũ có 2 trạng thái chính: `"Chờ thanh toán"` và `"Đã thanh toán"`. 
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/enums/PaymentStatusEnum.java`
+
+```java
+package com.duyminhdev.cf_manager.enums;
+
+import lombok.Getter;
+
+import java.util.Arrays;
+
+@Getter
+public enum PaymentStatusEnum {
+
+    PENDING_PAYMENT("PENDING_PAYMENT", "Chờ thanh toán"),
+    PAID("PAID", "Đã thanh toán");
+
+    private final String code;
+    private final String displayName;
+
+    PaymentStatusEnum(String code, String displayName) {
+        this.code = code;
+        this.displayName = displayName;
+    }
+
+    public static PaymentStatusEnum fromCode(String code) {
+        return Arrays.stream(values())
+                .filter(item -> item.code.equalsIgnoreCase(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid payment status code: " + code));
+    }
+
+    public static boolean isValidCode(String code) {
+        return Arrays.stream(values())
+                .anyMatch(item -> item.code.equalsIgnoreCase(code));
+    }
+}
+```
+
+---
+
+## 1.3.5. `PaymentMethodEnum.java`
+
+PaymentMethod là module ảo Java, không có bảng vật lý; flow cũ vẫn cần dropdown payment method. 
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/enums/PaymentMethodEnum.java`
+
+```java
+package com.duyminhdev.cf_manager.enums;
+
+import lombok.Getter;
+
+import java.util.Arrays;
+
+@Getter
+public enum PaymentMethodEnum {
+
+    CASH("CASH", "Tiền mặt", true, 1),
+    BANK_TRANSFER("BANK_TRANSFER", "Chuyển khoản", true, 2);
+
+    private final String code;
+    private final String displayName;
+    private final boolean active;
+    private final int displayOrder;
+
+    PaymentMethodEnum(String code, String displayName, boolean active, int displayOrder) {
+        this.code = code;
+        this.displayName = displayName;
+        this.active = active;
+        this.displayOrder = displayOrder;
+    }
+
+    public static PaymentMethodEnum fromCode(String code) {
+        return Arrays.stream(values())
+                .filter(item -> item.code.equalsIgnoreCase(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Invalid payment method code: " + code));
+    }
+
+    public static boolean isValidCode(String code) {
+        return Arrays.stream(values())
+                .anyMatch(item -> item.code.equalsIgnoreCase(code));
+    }
+}
+```
+
+---
+
+## 1.4. Tạo `VnPayConstant.java`
+
+Bạn đã chốt hard-code URL trong constants.
+**File:** `src/main/java/com/duyminhdev/cf_manager/constant/VnPayConstant.java`
+
+```java
+package com.duyminhdev.cf_manager.constant;
+
+public final class VnPayConstant {
+
+    private VnPayConstant() {
+    }
+
+    /**
+     * Hard-code theo yêu cầu hiện tại.
+     * Có thể thay bằng config sau nếu cần.
+     */
+    public static final String VNPAY_URL = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
+}
+```
+
+---
+
+## 1.5. Tạo constants validation dùng chung cho các phase sau
+
+Tài liệu DTO architecture và JPA Criteria đều nhấn mạnh validation phải đẩy ra request DTO, và regex/sort constraints nên dùng rule tập trung.
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/constant/ValidateValueConstants.java`
+
+```java
+package com.duyminhdev.cf_manager.constant;
+
+public final class ValidateValueConstants {
+
+    private ValidateValueConstants() {
+    }
+
+    /**
+     * Chỉ cho phép field sort là chữ, số, underscore, không cho ký tự nguy hiểm.
+     * Dùng cho request search.
+     */
+    public static final String SORT_FIELD = "^[a-zA-Z][a-zA-Z0-9_]*$";
+
+    /**
+     * Chuẩn asc / desc
+     */
+    public static final String SORT_DIR = "^(?i)(asc|desc)$";
+
+    /**
+     * Mã code chuẩn nghiệp vụ: chữ, số, underscore.
+     */
+    public static final String BUSINESS_CODE = "^[A-Z0-9_]+$";
+
+    /**
+     * Số điện thoại linh hoạt cho user nhập.
+     */
+    public static final String PHONE_NUMBER = "^[0-9+\\-()\\s]{8,20}$";
+
+    /**
+     * Chuỗi text ngắn an toàn.
+     */
+    public static final String SAFE_TEXT = "^[\\p{L}0-9 _.,:/()\\-+]{0,255}$";
+}
+```
+
+---
+
+## 1.6. Tạo utility map enum và normalize code
+
+Phase sau service/controller sẽ đỡ lặp code hơn nếu có utility nền.
+
+### `EnumCodeSupport.java`
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/utils/EnumCodeSupport.java`
+
+```java
+package com.duyminhdev.cf_manager.utils;
+
+public interface EnumCodeSupport {
+    String getCode();
+}
+```
+
+Vì enum hiện tại chưa implements interface này, có 2 cách:
+
+* hoặc sửa enum implements `EnumCodeSupport`
+* hoặc dùng util generic theo reflection/getCode method
+  Mình khuyên cách 1 sạch hơn. Nếu làm cách 1, sửa 5 enum ở trên như sau:
+
+Ví dụ với `TableStatusEnum`:
+
+```java
+public enum TableStatusEnum implements EnumCodeSupport {
+```
+
+Tương tự cho các enum còn lại.
+
+### `EnumUtils.java`
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/utils/EnumUtils.java`
+
+```java
+package com.duyminhdev.cf_manager.utils;
+
+import java.util.Arrays;
+
+public final class EnumUtils {
+
+    private EnumUtils() {
+    }
+
+    public static <E extends Enum<E> & EnumCodeSupport> E fromCode(Class<E> enumClass, String code) {
+        return Arrays.stream(enumClass.getEnumConstants())
+                .filter(item -> item.getCode().equalsIgnoreCase(code))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Invalid code '" + code + "' for enum " + enumClass.getSimpleName()
+                ));
+    }
+
+    public static <E extends Enum<E> & EnumCodeSupport> boolean isValidCode(Class<E> enumClass, String code) {
+        return Arrays.stream(enumClass.getEnumConstants())
+                .anyMatch(item -> item.getCode().equalsIgnoreCase(code));
+    }
+}
+```
+
+---
+
+## 1.7. Tạo utility lấy user hiện tại từ JWT context
+
+Base security hiện tại đã set `Authentication` vào `SecurityContext` khi JWT hợp lệ, nên phase service về sau có thể resolve username/account từ context thay vì tin vào `accountId` request. 
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/utils/SecurityUtils.java`
+
+```java
+package com.duyminhdev.cf_manager.utils;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+public final class SecurityUtils {
+
+    private SecurityUtils() {
+    }
+
+    public static String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || authentication.getName() == null) {
+            throw new IllegalStateException("Cannot resolve current authenticated username");
+        }
+
+        return authentication.getName();
+    }
+
+    public static boolean isAuthenticated() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getName() != null
+                && !"anonymousUser".equalsIgnoreCase(authentication.getName());
+    }
+}
+```
+
+---
+
+## 1.8. Tạo utility paging nền cho DTO base hiện có
+
+Project hiện có `PageFilterRequest` với `page`, `limit`, `sortField`, `sortDir`, và `PageResponse<T>` với `pageNo`, `pageSize`, `totalElements`, `totalPages`. Ta nên normalize ngay từ Phase 1 để các phase search không lặp sanitize. 
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/utils/PageUtils.java`
+
+```java
+package com.duyminhdev.cf_manager.utils;
+
+public final class PageUtils {
+
+    private static final int DEFAULT_PAGE = 0;
+    private static final int DEFAULT_LIMIT = 20;
+    private static final int MAX_LIMIT = 100;
+
+    private PageUtils() {
+    }
+
+    public static int normalizePage(Integer page) {
+        if (page == null || page < 0) {
+            return DEFAULT_PAGE;
+        }
+        return page;
+    }
+
+    public static int normalizeLimit(Integer limit) {
+        if (limit == null || limit < 1) {
+            return DEFAULT_LIMIT;
+        }
+        return Math.min(limit, MAX_LIMIT);
+    }
+
+    public static int calculateTotalPages(long totalElements, int pageSize) {
+        if (pageSize <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil((double) totalElements / pageSize);
+    }
+}
+```
+
+---
+
+## 1.9. Tạo helper response builder để controller phase sau gọn hơn
+
+Vì tất cả endpoint đều phải bọc `ApiResponse<T>`.
+
+**File:** `src/main/java/com/duyminhdev/cf_manager/utils/ResponseUtils.java`
+
+```java
+package com.duyminhdev.cf_manager.utils;
+
+import com.duyminhdev.cf_manager.dto.base.ApiResponse;
+
+public final class ResponseUtils {
+
+    private ResponseUtils() {
+    }
+
+    public static <T> ApiResponse<T> success(T data, String message) {
+        return new ApiResponse<>(200, message, data);
+    }
+
+    public static ApiResponse<Void> success(String message) {
+        return new ApiResponse<>(200, message);
+    }
+}
+```
+
+---
+
+# Checklist Phase 1 sau khi code xong
+
+Sau khi bạn hoàn tất Phase 1, project phải có các thứ này:
+
+### Entity patch
+
+* `TableEntity`: có `floor`, `seat`, `slot`
+* `TableBooking`: có `note`
+
+### Enums
+
+* `TableStatusEnum`
+* `BookingStatusEnum`
+* `DishOrderStatusEnum`
+* `PaymentStatusEnum`
+* `PaymentMethodEnum`
+
+### Constants
+
+* `VnPayConstant`
+* `ValidateValueConstants`
+
+### Utils
+
+* `EnumCodeSupport`
+* `EnumUtils`
+* `SecurityUtils`
+* `PageUtils`
+* `ResponseUtils`
+
+---
+
+# Vì sao Phase 1 này đúng với 3 tài liệu bạn gửi
+
+DTO architecture yêu cầu tách trách nhiệm rõ, validation phải nằm ở request DTO, response phải bọc bằng base wrapper, và data-access DTO phải tách khỏi API DTO. Phase 1 mình mới dựng **nền** để phase 2 làm DTO đúng chuẩn đó, không nhét logic lung tung từ sớm. 
+
+JPA Criteria document yêu cầu paging/sort/search phải có boundary validation, whitelist sort field và xây predicate an toàn. Vì vậy mình đã đặt sẵn `ValidateValueConstants` và `PageUtils` để phase sau dựng `crud/request/*SearchRequestDTO` đúng pattern. 
+
+Native Query document yêu cầu named parameters, whitelist sort mapping, tuple alias mapping sang result DTO trung gian. Vì vậy mình chưa ép DTO response ngay ở phase này, mà để chừa chỗ cho `dto/db_result/native_sql/*` ở Phase 2-3. 
+
+---
+
+# Sang Phase 2 sẽ code gì
+
+Phase 2 mình sẽ viết **full DTO code** theo đúng convention bạn chốt:
+
+* tất cả API dùng `POST`
+* bám `dto/base`
+* tách rõ `crud/request`, `crud/response`, `db_result/native_sql`
+* create/update/search/detail/action không dùng chung class. 
+
+Nếu bạn muốn, tin tiếp theo mình sẽ đi thẳng **PHASE 2 — toàn bộ DTO request/response/db_result chi tiết** cho:
+
+* table
+* table booking
+* dish
+* dish category
+* dish order
+* dish order detail
+* payment method
+* invoice

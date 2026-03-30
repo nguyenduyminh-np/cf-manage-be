@@ -9,8 +9,7 @@ import java.time.LocalDateTime;
 @Table(name = "table_booking")
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class TableBooking {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
     private Integer id;
 
@@ -18,7 +17,7 @@ public class TableBooking {
     private LocalDateTime bookingTime;
 
     @Column(name = "check_in_at")
-    private LocalDateTime checkinTime;
+    private LocalDateTime checkInTime;
 
     @Column(name = "booking_status", nullable = false, length = 255)
     private String bookingStatus;
@@ -27,19 +26,11 @@ public class TableBooking {
     private BigDecimal deposit;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
-    private Boolean isActive = true;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_account_id"))
-    private Account account;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "dining_table_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_dining_table_id"))
-    private TableEntity table;
+    private Boolean active = true;
 
     @Column(name = "customer_name", length = 255)
     private String customerName;
@@ -49,4 +40,12 @@ public class TableBooking {
 
     @Column(name = "note", length = 255)
     private String note;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_account_id"))
+    private Account account;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dining_table_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_dining_table_id"))
+    private TableEntity table;
 }

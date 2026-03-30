@@ -1,0 +1,1506 @@
+﻿Bắt đầu **PHASE 2**: mình sẽ đưa **full DTO code** theo đúng 3 rule bạn chốt:
+
+* bám kiến trúc `dto/base`, `dto/request`, `dto/response`, `dto/db_result/native_sql`
+* validation nằm ở `request DTO`
+* về sau controller/service/search sẽ bám đúng pattern **JPA Criteria** và **Native Query** từ 3 tài liệu bạn gửi.   
+
+Mình giữ convention:
+
+* tất cả class đều suffix `DTO`
+* các API đều dùng `POST`
+* search/list có phân trang sẽ `extends PageFilterRequest`
+* response không có validation
+* `db_result/native_sql` chỉ để map raw query result, không trả thẳng ra API.
+
+---
+
+# PHASE 2 — DTO FULL CODE
+
+## 2.1. Package structure
+
+```text id="8hzd8u"
+com.duyminhdev.cf_manager.dto
+├── base
+├── request
+│   ├── table
+│   ├── table_booking
+│   ├── dish
+│   ├── dish_category
+│   ├── dish_order
+│   ├── dish_order_detail
+│   ├── payment_method
+│   └── invoice
+├── response
+│   ├── table
+│   ├── table_booking
+│   ├── dish
+│   ├── dish_category
+│   ├── dish_order
+│   ├── dish_order_detail
+│   ├── payment_method
+│   └── invoice
+└── db_result
+    └── native_sql
+```
+
+---
+
+# A. REQUEST DTOs
+
+## A1. TABLE REQUEST DTOs
+
+### `TableSearchRequestDTO.java`
+
+**Path:** `dto/request/table/TableSearchRequestDTO.java`
+
+```java id="aqwhze"
+package com.duyminhdev.cf_manager.dto.request.table;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import com.duyminhdev.cf_manager.dto.base.PageFilterRequest;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class TableSearchRequestDTO extends PageFilterRequest {
+
+    private String keyword;
+
+    @Min(value = 1, message = "floor must be >= 1")
+    @Max(value = 100, message = "invalid floor range")
+    private Integer floor;
+
+    @Min(value = 1, message = "slot must be >= 1")
+    @Max(value = 1000, message = "slot must be <= 1000")
+    private Integer slot;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid tableStatus code")
+    private String tableStatus;
+
+    private Boolean active;
+}
+```
+
+### `TableDetailRequestDTO.java`
+
+**Path:** `dto/request/table/TableDetailRequestDTO.java`
+
+```java id="6v89ib"
+package com.duyminhdev.cf_manager.dto.request.table;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class TableDetailRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+}
+```
+
+### `TableStatusUpdateRequestDTO.java`
+
+**Path:** `dto/request/table/TableStatusUpdateRequestDTO.java`
+
+```java id="l5x2sr"
+package com.duyminhdev.cf_manager.dto.request.table;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class TableStatusUpdateRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid tableStatus code")
+    private String tableStatus;
+}
+```
+
+---
+
+## A2. TABLE BOOKING REQUEST DTOs
+
+### `TableBookingSearchRequestDTO.java`
+
+**Path:** `dto/request/table_booking/TableBookingSearchRequestDTO.java`
+
+```java id="3npo5u"
+package com.duyminhdev.cf_manager.dto.request.table_booking;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import com.duyminhdev.cf_manager.dto.base.PageFilterRequest;
+import jakarta.validation.constraints.Pattern;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+public class TableBookingSearchRequestDTO extends PageFilterRequest {
+
+    private Integer tableId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
+    private String bookingStatus;
+
+    private String customerName;
+
+    @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Invalid phone number")
+    private String phoneNumber;
+
+    private LocalDateTime bookingFrom;
+
+    private LocalDateTime bookingTo;
+
+    private Boolean active;
+}
+```
+
+### `TableBookingCreateRequestDTO.java`
+
+**Path:** `dto/request/table_booking/TableBookingCreateRequestDTO.java`
+
+```java id="mnz097"
+package com.duyminhdev.cf_manager.dto.request.table_booking;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.constraints.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+public class TableBookingCreateRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+
+    @NotNull(message = "bookingTime is required")
+    private LocalDateTime bookingTime;
+
+    @Size(max = 255, message = "customerName must be <= 255 characters")
+    private String customerName;
+
+    @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Invalid phone number")
+    private String phoneNumber;
+
+    @DecimalMin(value = "0", inclusive = true, message = "deposit must be >= 0")
+    private BigDecimal deposit;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
+    private String bookingStatus;
+
+    @Size(max = 255, message = "note must be <= 255 characters")
+    private String note;
+}
+```
+
+### `TableBookingUpdateRequestDTO.java`
+
+**Path:** `dto/request/table_booking/TableBookingUpdateRequestDTO.java`
+
+```java id="al58vu"
+package com.duyminhdev.cf_manager.dto.request.table_booking;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.constraints.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+public class TableBookingUpdateRequestDTO {
+
+    @NotNull(message = "bookingId is required")
+    @Positive(message = "bookingId must be > 0")
+    private Integer bookingId;
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+
+    @NotNull(message = "bookingTime is required")
+    private LocalDateTime bookingTime;
+
+    @Size(max = 255, message = "customerName must be <= 255 characters")
+    private String customerName;
+
+    @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Invalid phone number")
+    private String phoneNumber;
+
+    @DecimalMin(value = "0", inclusive = true, message = "deposit must be >= 0")
+    private BigDecimal deposit;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
+    private String bookingStatus;
+
+    @Size(max = 255, message = "note must be <= 255 characters")
+    private String note;
+}
+```
+
+### `TableBookingStatusUpdateRequestDTO.java`
+
+**Path:** `dto/request/table_booking/TableBookingStatusUpdateRequestDTO.java`
+
+```java id="a1iepb"
+package com.duyminhdev.cf_manager.dto.request.table_booking;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class TableBookingStatusUpdateRequestDTO {
+
+    @NotNull(message = "bookingId is required")
+    @Positive(message = "bookingId must be > 0")
+    private Integer bookingId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
+    private String bookingStatus;
+}
+```
+
+---
+
+## A3. DISH REQUEST DTOs
+
+### `DishListRequestDTO.java`
+
+**Path:** `dto/request/dish/DishListRequestDTO.java`
+
+```java id="p0yd3m"
+package com.duyminhdev.cf_manager.dto.request.dish;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishListRequestDTO {
+
+    private Boolean active = true;
+}
+```
+
+### `DishSearchRequestDTO.java`
+
+**Path:** `dto/request/dish/DishSearchRequestDTO.java`
+
+```java id="q6f0ez"
+package com.duyminhdev.cf_manager.dto.request.dish;
+
+import com.duyminhdev.cf_manager.dto.base.PageFilterRequest;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishSearchRequestDTO extends PageFilterRequest {
+
+    private String keyword;
+
+    @Positive(message = "dishCategoryId must be > 0")
+    private Integer dishCategoryId;
+
+    private Boolean active;
+}
+```
+
+---
+
+## A4. DISH CATEGORY REQUEST DTOs
+
+### `DishCategoryListRequestDTO.java`
+
+**Path:** `dto/request/dish_category/DishCategoryListRequestDTO.java`
+
+```java id="0rixtm"
+package com.duyminhdev.cf_manager.dto.request.dish_category;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishCategoryListRequestDTO {
+
+    private Boolean active = true;
+}
+```
+
+---
+
+## A5. DISH ORDER REQUEST DTOs
+
+### `DishOrderListByTableRequestDTO.java`
+
+**Path:** `dto/request/dish_order/DishOrderListByTableRequestDTO.java`
+
+```java id="enpzav"
+package com.duyminhdev.cf_manager.dto.request.dish_order;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishOrderListByTableRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+}
+```
+
+### `DishOrderDetailPayloadDTO.java`
+
+**Path:** `dto/request/dish_order/DishOrderDetailPayloadDTO.java`
+
+```java id="69cn1x"
+package com.duyminhdev.cf_manager.dto.request.dish_order;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishOrderDetailPayloadDTO {
+
+    @Positive(message = "detailId must be > 0")
+    private Integer detailId;
+
+    @NotNull(message = "dishId is required")
+    @Positive(message = "dishId must be > 0")
+    private Integer dishId;
+
+    @NotNull(message = "quantity is required")
+    @Positive(message = "quantity must be > 0")
+    private Integer quantity;
+
+    @Size(max = 500, message = "note must be <= 500 characters")
+    private String note;
+}
+```
+
+### `DishOrderCreateRequestDTO.java`
+
+**Path:** `dto/request/dish_order/DishOrderCreateRequestDTO.java`
+
+```java id="7ycvvx"
+package com.duyminhdev.cf_manager.dto.request.dish_order;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.List;
+
+@Getter
+@Setter
+public class DishOrderCreateRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid dishOrderStatus code")
+    private String dishOrderStatus;
+
+    @NotEmpty(message = "dishOrderDetails must not be empty")
+    @Valid
+    private List<DishOrderDetailPayloadDTO> dishOrderDetails;
+}
+```
+
+### `DishOrderUpdateRequestDTO.java`
+
+**Path:** `dto/request/dish_order/DishOrderUpdateRequestDTO.java`
+
+```java id="6b5m4r"
+package com.duyminhdev.cf_manager.dto.request.dish_order;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.List;
+
+@Getter
+@Setter
+public class DishOrderUpdateRequestDTO {
+
+    @NotNull(message = "dishOrderId is required")
+    @Positive(message = "dishOrderId must be > 0")
+    private Integer dishOrderId;
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid dishOrderStatus code")
+    private String dishOrderStatus;
+
+    @NotEmpty(message = "dishOrderDetails must not be empty")
+    @Valid
+    private List<DishOrderDetailPayloadDTO> dishOrderDetails;
+}
+```
+
+### `DishOrderStatusUpdateRequestDTO.java`
+
+**Path:** `dto/request/dish_order/DishOrderStatusUpdateRequestDTO.java`
+
+```java id="ij3brk"
+package com.duyminhdev.cf_manager.dto.request.dish_order;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishOrderStatusUpdateRequestDTO {
+
+    @NotNull(message = "dishOrderId is required")
+    @Positive(message = "dishOrderId must be > 0")
+    private Integer dishOrderId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid dishOrderStatus code")
+    private String dishOrderStatus;
+}
+```
+
+---
+
+## A6. DISH ORDER DETAIL REQUEST DTOs
+
+### `DishOrderDetailListByOrderRequestDTO.java`
+
+**Path:** `dto/request/dish_order_detail/DishOrderDetailListByOrderRequestDTO.java`
+
+```java id="31ltjc"
+package com.duyminhdev.cf_manager.dto.request.dish_order_detail;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishOrderDetailListByOrderRequestDTO {
+
+    @NotNull(message = "dishOrderId is required")
+    @Positive(message = "dishOrderId must be > 0")
+    private Integer dishOrderId;
+}
+```
+
+### `DishOrderDetailListByTableRequestDTO.java`
+
+**Path:** `dto/request/dish_order_detail/DishOrderDetailListByTableRequestDTO.java`
+
+```java id="raqgwz"
+package com.duyminhdev.cf_manager.dto.request.dish_order_detail;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class DishOrderDetailListByTableRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+}
+```
+
+---
+
+## A7. PAYMENT METHOD REQUEST DTOs
+
+### `PaymentMethodListRequestDTO.java`
+
+**Path:** `dto/request/payment_method/PaymentMethodListRequestDTO.java`
+
+```java id="4trij7"
+package com.duyminhdev.cf_manager.dto.request.payment_method;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class PaymentMethodListRequestDTO {
+
+    private Boolean active = true;
+}
+```
+
+---
+
+## A8. INVOICE REQUEST DTOs
+
+### `InvoiceCountRequestDTO.java`
+
+**Path:** `dto/request/invoice/InvoiceCountRequestDTO.java`
+
+```java id="s8hnry"
+package com.duyminhdev.cf_manager.dto.request.invoice;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class InvoiceCountRequestDTO {
+}
+```
+
+### `InvoiceDetailPayloadDTO.java`
+
+**Path:** `dto/request/invoice/InvoiceDetailPayloadDTO.java`
+
+```java id="ir9cn1"
+package com.duyminhdev.cf_manager.dto.request.invoice;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+public class InvoiceDetailPayloadDTO {
+
+    @Positive(message = "invoiceDetailId must be > 0")
+    private Integer invoiceDetailId;
+
+    @NotNull(message = "dishId is required")
+    @Positive(message = "dishId must be > 0")
+    private Integer dishId;
+
+    @NotNull(message = "quantity is required")
+    @Positive(message = "quantity must be > 0")
+    private Integer quantity;
+
+    @NotNull(message = "unitPrice is required")
+    @DecimalMin(value = "0", inclusive = false, message = "unitPrice must be > 0")
+    private BigDecimal unitPrice;
+}
+```
+
+### `InvoiceCreateRequestDTO.java`
+
+**Path:** `dto/request/invoice/InvoiceCreateRequestDTO.java`
+
+```java id="iuq1uk"
+package com.duyminhdev.cf_manager.dto.request.invoice;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Getter
+@Setter
+public class InvoiceCreateRequestDTO {
+
+    @NotNull(message = "tableId is required")
+    @Positive(message = "tableId must be > 0")
+    private Integer tableId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid paymentMethod code")
+    private String paymentMethod;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid paymentStatus code")
+    private String paymentStatus;
+
+    @NotNull(message = "totalMoney is required")
+    @DecimalMin(value = "0", inclusive = false, message = "totalMoney must be > 0")
+    private BigDecimal totalMoney;
+
+    @Positive(message = "guestCount must be > 0")
+    private Integer guestCount = 1;
+
+    @NotEmpty(message = "invoiceDetails must not be empty")
+    @Valid
+    private List<InvoiceDetailPayloadDTO> invoiceDetails;
+}
+```
+
+### `InvoiceConfirmPaymentRequestDTO.java`
+
+**Path:** `dto/request/invoice/InvoiceConfirmPaymentRequestDTO.java`
+
+```java id="r74s5e"
+package com.duyminhdev.cf_manager.dto.request.invoice;
+
+import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class InvoiceConfirmPaymentRequestDTO {
+
+    @NotNull(message = "invoiceId is required")
+    @Positive(message = "invoiceId must be > 0")
+    private Integer invoiceId;
+
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid paymentStatus code")
+    private String paymentStatus;
+}
+```
+
+### `InvoiceDetailRequestDTO.java`
+
+**Path:** `dto/request/invoice/InvoiceDetailRequestDTO.java`
+
+```java id="c4gcca"
+package com.duyminhdev.cf_manager.dto.request.invoice;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class InvoiceDetailRequestDTO {
+
+    @NotNull(message = "invoiceId is required")
+    @Positive(message = "invoiceId must be > 0")
+    private Integer invoiceId;
+}
+```
+
+---
+
+# B. RESPONSE DTOs
+
+## B1. TABLE RESPONSE DTOs
+
+### `TableSearchResponseDTO.java`
+
+**Path:** `dto/response/table/TableSearchResponseDTO.java`
+
+```java id="vpm66q"
+package com.duyminhdev.cf_manager.dto.response.table;
+
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TableSearchResponseDTO {
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private String tableStatus;
+    private String tableStatusName;
+
+    private Integer floor;
+    private Integer seat;
+    private Integer slot;
+
+    private Integer totalBooking;
+    private LocalDateTime lastBookingTime;
+
+    private Boolean active;
+}
+```
+
+### `TableDetailResponseDTO.java`
+
+**Path:** `dto/response/table/TableDetailResponseDTO.java`
+
+```java id="sc2p7l"
+package com.duyminhdev.cf_manager.dto.response.table;
+
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TableDetailResponseDTO {
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private String tableStatus;
+    private String tableStatusName;
+
+    private Integer floor;
+    private Integer seat;
+    private Integer slot;
+
+    private Boolean active;
+    private LocalDateTime createdTime;
+}
+```
+
+---
+
+## B2. TABLE BOOKING RESPONSE DTO
+
+### `TableBookingResponseDTO.java`
+
+**Path:** `dto/response/table_booking/TableBookingResponseDTO.java`
+
+```java id="eisq79"
+package com.duyminhdev.cf_manager.dto.response.table_booking;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TableBookingResponseDTO {
+
+    private Integer bookingId;
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private LocalDateTime bookingTime;
+    private LocalDateTime checkInTime;
+
+    private String bookingStatus;
+    private String bookingStatusName;
+
+    private String customerName;
+    private String phoneNumber;
+    private BigDecimal deposit;
+    private String note;
+
+    private Integer accountId;
+    private String accountUsername;
+    private String accountFullName;
+
+    private Boolean active;
+    private LocalDateTime createdTime;
+}
+```
+
+---
+
+## B3. DISH RESPONSE DTO
+
+### `DishResponseDTO.java`
+
+**Path:** `dto/response/dish/DishResponseDTO.java`
+
+```java id="x22y4u"
+package com.duyminhdev.cf_manager.dto.response.dish;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DishResponseDTO {
+
+    private Integer dishId;
+    private String dishCode;
+    private String dishName;
+    private BigDecimal price;
+    private String photo;
+
+    private Integer dishCategoryId;
+    private String dishCategoryCode;
+    private String dishCategoryName;
+
+    private Boolean active;
+    private LocalDateTime createdTime;
+}
+```
+
+---
+
+## B4. DISH CATEGORY RESPONSE DTO
+
+### `DishCategoryResponseDTO.java`
+
+**Path:** `dto/response/dish_category/DishCategoryResponseDTO.java`
+
+```java id="az0lal"
+package com.duyminhdev.cf_manager.dto.response.dish_category;
+
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DishCategoryResponseDTO {
+
+    private Integer dishCategoryId;
+    private String dishCategoryCode;
+    private String dishCategoryName;
+
+    private Boolean active;
+    private LocalDateTime createdTime;
+}
+```
+
+---
+
+## B5. DISH ORDER RESPONSE DTOs
+
+### `DishOrderResponseDTO.java`
+
+**Path:** `dto/response/dish_order/DishOrderResponseDTO.java`
+
+```java id="l4or9m"
+package com.duyminhdev.cf_manager.dto.response.dish_order;
+
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DishOrderResponseDTO {
+
+    private Integer dishOrderId;
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private Integer accountId;
+    private String accountUsername;
+    private String accountFullName;
+
+    private Integer dishOrderStatusId;
+    private String dishOrderStatus;
+    private String dishOrderStatusName;
+
+    private String note;
+    private Boolean active;
+    private LocalDateTime createdTime;
+}
+```
+
+---
+
+## B6. DISH ORDER DETAIL RESPONSE DTOs
+
+### `DishOrderDetailResponseDTO.java`
+
+**Path:** `dto/response/dish_order_detail/DishOrderDetailResponseDTO.java`
+
+```java id="cux7qj"
+package com.duyminhdev.cf_manager.dto.response.dish_order_detail;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DishOrderDetailResponseDTO {
+
+    private Integer dishOrderDetailId;
+    private Integer dishOrderId;
+
+    private Integer dishId;
+    private String dishCode;
+    private String dishName;
+    private String dishPhoto;
+
+    private Integer quantity;
+    private BigDecimal price;
+    private BigDecimal totalPrice;
+
+    private String note;
+    private Boolean active;
+    private LocalDateTime createdTime;
+}
+```
+
+### `DishGroupedByTableResponseDTO.java`
+
+**Path:** `dto/response/dish_order_detail/DishGroupedByTableResponseDTO.java`
+
+```java id="dzqvj5"
+package com.duyminhdev.cf_manager.dto.response.dish_order_detail;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DishGroupedByTableResponseDTO {
+
+    private Integer dishId;
+    private String dishCode;
+    private String dishName;
+    private String dishPhoto;
+
+    private Integer totalQuantity;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
+}
+```
+
+---
+
+## B7. PAYMENT METHOD RESPONSE DTO
+
+### `PaymentMethodResponseDTO.java`
+
+**Path:** `dto/response/payment_method/PaymentMethodResponseDTO.java`
+
+```java id="tdurqt"
+package com.duyminhdev.cf_manager.dto.response.payment_method;
+
+import lombok.*;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class PaymentMethodResponseDTO {
+
+    private String code;
+    private String name;
+    private Boolean active;
+    private Integer displayOrder;
+}
+```
+
+---
+
+## B8. INVOICE RESPONSE DTOs
+
+### `InvoiceCountResponseDTO.java`
+
+**Path:** `dto/response/invoice/InvoiceCountResponseDTO.java`
+
+```java id="j4kc6x"
+package com.duyminhdev.cf_manager.dto.response.invoice;
+
+import lombok.*;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class InvoiceCountResponseDTO {
+
+    private Long totalInvoices;
+    private String nextInvoiceCode;
+}
+```
+
+### `InvoiceLineResponseDTO.java`
+
+**Path:** `dto/response/invoice/InvoiceLineResponseDTO.java`
+
+```java id="tnc66c"
+package com.duyminhdev.cf_manager.dto.response.invoice;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class InvoiceLineResponseDTO {
+
+    private Integer invoiceDetailId;
+    private Integer dishId;
+    private String dishCode;
+    private String dishName;
+
+    private Integer quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal lineTotal;
+}
+```
+
+### `InvoiceResponseDTO.java`
+
+**Path:** `dto/response/invoice/InvoiceResponseDTO.java`
+
+```java id="d8ers7"
+package com.duyminhdev.cf_manager.dto.response.invoice;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class InvoiceResponseDTO {
+
+    private Integer invoiceId;
+    private String invoiceCode;
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private Integer accountId;
+    private String accountUsername;
+    private String accountFullName;
+
+    private String paymentStatus;
+    private String paymentStatusName;
+
+    private String paymentMethod;
+    private String paymentMethodName;
+
+    private Integer guestCount;
+    private BigDecimal totalMoney;
+
+    private Boolean active;
+    private LocalDateTime createdTime;
+
+    private String uriVnPay;
+}
+```
+
+### `InvoiceDetailResponseDTO.java`
+
+**Path:** `dto/response/invoice/InvoiceDetailResponseDTO.java`
+
+```java id="2sn7de"
+package com.duyminhdev.cf_manager.dto.response.invoice;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class InvoiceDetailResponseDTO {
+
+    private Integer invoiceId;
+    private String invoiceCode;
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private Integer accountId;
+    private String accountUsername;
+    private String accountFullName;
+
+    private String paymentStatus;
+    private String paymentStatusName;
+
+    private String paymentMethod;
+    private String paymentMethodName;
+
+    private Integer guestCount;
+    private BigDecimal totalMoney;
+
+    private Boolean active;
+    private LocalDateTime createdTime;
+
+    private String uriVnPay;
+
+    private List<InvoiceLineResponseDTO> invoiceDetails;
+}
+```
+
+### `InvoiceConfirmPaymentResponseDTO.java`
+
+**Path:** `dto/response/invoice/InvoiceConfirmPaymentResponseDTO.java`
+
+```java id="99tew9"
+package com.duyminhdev.cf_manager.dto.response.invoice;
+
+import lombok.*;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class InvoiceConfirmPaymentResponseDTO {
+
+    private Integer invoiceId;
+    private String invoiceCode;
+    private String paymentStatus;
+    private String paymentStatusName;
+}
+```
+
+---
+
+# C. DB_RESULT DTOs — Native SQL mapping only
+
+Các DTO này chỉ để map raw result từ Native Query bằng alias, đúng theo tài liệu native search. Không dùng trực tiếp làm API response. 
+
+## C1. `TableSearchNativeResultDTO.java`
+
+**Path:** `dto/db_result/native_sql/TableSearchNativeResultDTO.java`
+
+```java id="t441tq"
+package com.duyminhdev.cf_manager.dto.db_result.native_sql;
+
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TableSearchNativeResultDTO {
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private String tableStatus;
+
+    private Integer floor;
+    private Integer seat;
+    private Integer slot;
+
+    private Integer totalBooking;
+    private LocalDateTime lastBookingTime;
+
+    private Boolean active;
+}
+```
+
+## C2. `DishGroupedByTableNativeResultDTO.java`
+
+**Path:** `dto/db_result/native_sql/DishGroupedByTableNativeResultDTO.java`
+
+```java id="fj8h9u"
+package com.duyminhdev.cf_manager.dto.db_result.native_sql;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DishGroupedByTableNativeResultDTO {
+
+    private Integer dishId;
+    private String dishCode;
+    private String dishName;
+    private String dishPhoto;
+
+    private Integer totalQuantity;
+    private BigDecimal unitPrice;
+    private BigDecimal totalPrice;
+}
+```
+
+## C3. `InvoiceDetailNativeResultDTO.java`
+
+**Path:** `dto/db_result/native_sql/InvoiceDetailNativeResultDTO.java`
+
+```java id="6xbrf6"
+package com.duyminhdev.cf_manager.dto.db_result.native_sql;
+
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class InvoiceDetailNativeResultDTO {
+
+    private Integer invoiceId;
+    private String invoiceCode;
+
+    private Integer tableId;
+    private String tableCode;
+    private String tableName;
+
+    private Integer accountId;
+    private String accountUsername;
+    private String accountFullName;
+
+    private String paymentStatus;
+    private String paymentMethod;
+
+    private Integer guestCount;
+    private BigDecimal totalMoney;
+    private LocalDateTime createdTime;
+
+    private Integer invoiceDetailId;
+    private Integer dishId;
+    private String dishCode;
+    private String dishName;
+    private Integer quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal lineTotal;
+}
+```
+
+---
+
+# D. DTO mapping summary theo từng API POST
+
+## `POST /api/v1/table/search`
+
+* Request: `TableSearchRequestDTO`
+* Response item: `TableSearchResponseDTO`
+* Native result: `TableSearchNativeResultDTO`
+
+## `POST /api/v1/table/detail`
+
+* Request: `TableDetailRequestDTO`
+* Response: `TableDetailResponseDTO`
+
+## `POST /api/v1/table/update-status`
+
+* Request: `TableStatusUpdateRequestDTO`
+
+## `POST /api/v1/table-booking/search`
+
+* Request: `TableBookingSearchRequestDTO`
+* Response: `TableBookingResponseDTO`
+
+## `POST /api/v1/table-booking/create`
+
+* Request: `TableBookingCreateRequestDTO`
+
+## `POST /api/v1/table-booking/update`
+
+* Request: `TableBookingUpdateRequestDTO`
+
+## `POST /api/v1/table-booking/update-status`
+
+* Request: `TableBookingStatusUpdateRequestDTO`
+
+## `POST /api/v1/dish/list`
+
+* Request: `DishListRequestDTO`
+* Response: `DishResponseDTO`
+
+## `POST /api/v1/dish/search`
+
+* Request: `DishSearchRequestDTO`
+* Response: `DishResponseDTO`
+
+## `POST /api/v1/dish-category/list`
+
+* Request: `DishCategoryListRequestDTO`
+* Response: `DishCategoryResponseDTO`
+
+## `POST /api/v1/dish-order/list-by-table`
+
+* Request: `DishOrderListByTableRequestDTO`
+* Response: `DishOrderResponseDTO`
+
+## `POST /api/v1/dish-order/create`
+
+* Request: `DishOrderCreateRequestDTO`
+
+## `POST /api/v1/dish-order/update`
+
+* Request: `DishOrderUpdateRequestDTO`
+
+## `POST /api/v1/dish-order/update-status`
+
+* Request: `DishOrderStatusUpdateRequestDTO`
+
+## `POST /api/v1/dish-order-detail/list-by-order`
+
+* Request: `DishOrderDetailListByOrderRequestDTO`
+* Response: `DishOrderDetailResponseDTO`
+
+## `POST /api/v1/dish-order-detail/list-by-table`
+
+* Request: `DishOrderDetailListByTableRequestDTO`
+* Response: `DishGroupedByTableResponseDTO`
+* Native result: `DishGroupedByTableNativeResultDTO`
+
+## `POST /api/v1/payment-method/list`
+
+* Request: `PaymentMethodListRequestDTO`
+* Response: `PaymentMethodResponseDTO`
+
+## `POST /api/v1/invoice/count`
+
+* Request: `InvoiceCountRequestDTO`
+* Response: `InvoiceCountResponseDTO`
+
+## `POST /api/v1/invoice/create`
+
+* Request: `InvoiceCreateRequestDTO`
+* Response: `InvoiceResponseDTO`
+
+## `POST /api/v1/invoice/confirm-payment`
+
+* Request: `InvoiceConfirmPaymentRequestDTO`
+* Response: `InvoiceConfirmPaymentResponseDTO`
+
+## `POST /api/v1/invoice/detail`
+
+* Request: `InvoiceDetailRequestDTO`
+* Response: `InvoiceDetailResponseDTO`
+* Native result: `InvoiceDetailNativeResultDTO`
+
+---
+
+# E. 3 lưu ý quan trọng trước khi sang Phase 3
+
+### 1. `PageFilterRequest` hiện tại chưa có annotation validation
+
+Trong tài liệu JPA Criteria, phần page/sort boundary được kiểm rất chặt. Ở Phase 3 mình sẽ cần:
+
+* hoặc patch `PageFilterRequest`
+* hoặc validate/sanitize ở service/repository helper
+  Tốt nhất là patch DTO base sau nếu bạn cho phép. 
+
+### 2. `sortField` cho search DTO chưa whitelist tại DTO
+
+Theo tài liệu, whitelist sort field phải kiểm ở repository/spec/native layer, không chỉ regex ở DTO. Phase 3 mình sẽ làm phần đó trong:
+
+* `TableBookingSpec`
+* `DishSpec`
+* native repository `mapSortFieldToDbColumn(...)`
+
+### 3. Native result DTO phải map bằng alias tuyệt đối
+
+Phase 3 khi viết native repository, các alias SQL phải khớp 100% với field names trong `db_result/native_sql`, nếu không map tuple sẽ lỗi. 
+
+---
+
+# Kết thúc Phase 2
+
+Vậy là Phase 2 đã khóa xong toàn bộ:
+
+* request DTO
+* response DTO
+* native result DTO
+* mapping DTO theo từng API POST
+
+Bước tiếp theo hợp lý nhất là sang **PHASE 3 — Repository + Spec + Native Repository full code**.
+
+

@@ -72,7 +72,7 @@ public class AuthServiceImpl implements AuthService {
         Account account = accountRepo.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        if (account.getIsActive() == null || !account.getIsActive()) {
+        if (account.getActive() == null || !account.getActive()) {
             throw new DisabledException("User is not active");
         }
 
@@ -95,12 +95,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse refresh(String refreshToken) {
-        AccountToken token = tokenRepo.findByRefreshTokenAndIsRevokedFalse(refreshToken)
+        AccountToken token = tokenRepo.findByRefreshTokenAndRevokedFalse(refreshToken)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
         Account account = token.getAccount();
 
-        if (account.getIsActive() == null || !account.getIsActive()) {
+        if (account.getActive() == null || !account.getActive()) {
             throw new DisabledException("User is not active");
         }
 
@@ -111,7 +111,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Revoke old token
-        token.setIsRevoked(true);
+        token.setRevoked(true);
         tokenRepo.save(token);
 
         return issueTokens(account, "REFRESH_TOKEN_SUCCESSFULLY");
@@ -120,11 +120,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse logout(String refreshToken) {
-        AccountToken token = tokenRepo.findByRefreshTokenAndIsRevokedFalse(refreshToken)
+        AccountToken token = tokenRepo.findByRefreshTokenAndRevokedFalse(refreshToken)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
         // Revoke the token — this invalidates both refresh token and access token (JTI mismatch)
-        token.setIsRevoked(true);
+        token.setRevoked(true);
         tokenRepo.save(token);
 
         return AuthResponse.builder()
@@ -152,8 +152,8 @@ public class AuthServiceImpl implements AuthService {
      */
     private AuthResponse issueTokens(Account account, String message) {
         // Revoke any existing active token for this account
-        tokenRepo.findByAccountAndIsRevokedFalse(account).ifPresent(oldToken -> {
-            oldToken.setIsRevoked(true);
+        tokenRepo.findByAccountAndRevokedFalse(account).ifPresent(oldToken -> {
+            oldToken.setRevoked(true);
             tokenRepo.save(oldToken);
         });
 
@@ -169,7 +169,7 @@ public class AuthServiceImpl implements AuthService {
                 .refreshToken(refreshToken)
                 .refreshTokenExpiresAt(LocalDateTime.ofInstant(refreshExpiresAt, ZoneId.systemDefault()))
                 .accessTokenJti(jti)
-                .isRevoked(false)
+                .revoked(false)
                 .build();
         tokenRepo.save(newToken);
 
@@ -192,8 +192,8 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(rawPassword))
                 .fullName(fullName)
                 .photo("images/userdefault.jpg")
-                .isActive(true)
-                .createdAt(LocalDateTime.now())
+                .active(true)
+                .createdTime(LocalDateTime.now())
                 .dob(LocalDateTime.of(2000, 1, 1, 0, 0))
                 .role(role)
                 .build();

@@ -19,9 +19,9 @@ public class Role {
     private String roleName;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private LocalDateTime createdTime;
 
     // Trong DB là Active tinyint(1) DEFAULT NULL -> Không có default, nullable
     @Column(name = "is_active")
-    private Boolean isActive;
+    private Boolean active;
 }

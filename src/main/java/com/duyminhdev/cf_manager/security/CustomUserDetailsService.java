@@ -31,12 +31,12 @@ public class CustomUserDetailsService implements UserDetailsService {
             throw new UsernameNotFoundException("User has no password set");
         }
 
-        if (account.getIsActive() == null || !account.getIsActive()) {
+        if (account.getActive() == null || !account.getActive()) {
             throw new UsernameNotFoundException("User inactive");
         }
 
         // Load the active (non-revoked) token's JTI for JTI comparison in the filter
-        String activeJti = tokenRepo.findByAccountAndIsRevokedFalse(account)
+        String activeJti = tokenRepo.findByAccountAndRevokedFalse(account)
                 .map(AccountToken::getAccessTokenJti)
                 .orElse(null);
 
