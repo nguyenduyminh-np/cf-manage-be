@@ -1,4 +1,4 @@
-package main.java.com.duyminhdev.cf_manager.repository.spec;
+package com.duyminhdev.cf_manager.repository.spec;  
 
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingSearchRequestDTO;
 import com.duyminhdev.cf_manager.entity.TableBooking;

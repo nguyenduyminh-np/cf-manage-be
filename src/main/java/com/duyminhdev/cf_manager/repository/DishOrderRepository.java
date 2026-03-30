@@ -1,4 +1,4 @@
-package main.java.com.duyminhdev.cf_manager.repository;
+package com.duyminhdev.cf_manager.repository;
 
 import com.duyminhdev.cf_manager.entity.DishOrder;
 import org.springframework.data.jpa.repository.EntityGraph;

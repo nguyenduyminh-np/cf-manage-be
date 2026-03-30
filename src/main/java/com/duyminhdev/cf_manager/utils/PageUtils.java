@@ -1,7 +1,6 @@
 package com.duyminhdev.cf_manager.utils;
 
 public final class PageUtils {
-
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 100;
@@ -17,7 +16,7 @@ public final class PageUtils {
     }
 
     public static int normalizeLimit(Integer limit) {
-        if (limit == null || limit <= 0) {
+        if (limit == null || limit < 1) {
             return DEFAULT_LIMIT;
         }
         return Math.min(limit, MAX_LIMIT);
@@ -27,6 +26,6 @@ public final class PageUtils {
         if (pageSize <= 0) {
             return 0;
         }
-        return (int) ((totalElements + pageSize - 1) / pageSize);
+        return (int) Math.ceil((double) totalElements / pageSize);
     }
 }

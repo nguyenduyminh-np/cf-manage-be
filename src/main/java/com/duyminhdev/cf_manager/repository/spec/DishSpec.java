@@ -1,4 +1,4 @@
-package main.java.com.duyminhdev.cf_manager.repository.spec;
+package com.duyminhdev.cf_manager.repository.spec;
 
 import com.duyminhdev.cf_manager.dto.request.dish.DishSearchRequestDTO;
 import com.duyminhdev.cf_manager.entity.Dish;
