@@ -3,7 +3,8 @@ package com.duyminhdev.cf_manager.repository.impl;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
-
+import com.duyminhdev.cf_manager.repository.NativeSqlTableRepository;
+import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import com.duyminhdev.cf_manager.utils.PageUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -12,7 +13,7 @@ import jakarta.persistence.Tuple;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,19 +57,25 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
 
     @Override
     public PageResponse<List<TableSearchNativeResultDTO>> search(TableSearchRequestDTO request) {
-        int pageNo = PageUtils.normalizePage(request.getPage());
-        int pageSize = PageUtils.normalizeLimit(request.getLimit());
+        TableSearchRequestDTO safeRequest = request != null ? request : new TableSearchRequestDTO();
 
-        Map<String, Object> params = new HashMap<>();
-        String whereClause = buildWhere(request, params);
-        String orderBy = buildOrderBy(request.getSortField(), request.getSortDir());
+        int pageNo = PageUtils.normalizePage(safeRequest.getPage());
+        int pageSize = PageUtils.normalizeLimit(safeRequest.getLimit());
+        int offset = pageNo * pageSize;
 
-        String dataSql = SELECT_COLUMNS + FROM_WHERE + whereClause + GROUP_BY + orderBy;
+        Map<String, Object> params = new LinkedHashMap<>();
+        String whereClause = buildWhereClause(safeRequest, params);
+        String orderBy = buildOrderBy(safeRequest.getSortField(), safeRequest.getSortDir());
+
+        String dataSql = SELECT_COLUMNS
+                + FROM_WHERE
+                + whereClause
+                + GROUP_BY
+                + orderBy
+                + " LIMIT " + offset + ", " + pageSize;
 
         Query dataQuery = entityManager.createNativeQuery(dataSql, Tuple.class);
-        params.forEach(dataQuery::setParameter);
-        dataQuery.setFirstResult(pageNo * pageSize);
-        dataQuery.setMaxResults(pageSize);
+        bindParameters(dataQuery, params);
 
         @SuppressWarnings("unchecked")
         List<Tuple> tuples = dataQuery.getResultList();
@@ -77,7 +84,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
                 .map(this::mapTupleToDto)
                 .toList();
 
-        long totalElements = countTotalElements(request);
+        long totalElements = countTotalElements(safeRequest);
         int totalPages = PageUtils.calculateTotalPages(totalElements, pageSize);
 
         PageResponse<List<TableSearchNativeResultDTO>> response = new PageResponse<>();
@@ -90,33 +97,42 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
     }
 
     private long countTotalElements(TableSearchRequestDTO request) {
-        StringBuilder sql = new StringBuilder("""
+        Map<String, Object> params = new LinkedHashMap<>();
+
+        String countSql = """
                 SELECT COUNT(1)
                 FROM dining_table dt
                 WHERE 1 = 1
-                """);
+                """ + buildWhereClause(request, params);
 
-        Map<String, Object> params = new HashMap<>();
-        sql.append(buildCountWhere(request, params));
-
-        Query countQuery = entityManager.createNativeQuery(sql.toString());
-        params.forEach(countQuery::setParameter);
+        Query countQuery = entityManager.createNativeQuery(countSql);
+        bindParameters(countQuery, params);
 
         Object result = countQuery.getSingleResult();
         return ((Number) result).longValue();
     }
 
-    private String buildWhere(TableSearchRequestDTO request, Map<String, Object> params) {
+    private String buildWhereClause(TableSearchRequestDTO request, Map<String, Object> params) {
         StringBuilder sql = new StringBuilder();
+
+        if (request == null) {
+            return sql.toString();
+        }
 
         if (StringUtils.hasText(request.getKeyword())) {
             sql.append("""
                      AND (
-                        LOWER(dt.table_code) LIKE :keyword ESCAPE '\\'
-                        OR LOWER(dt.table_name) LIKE :keyword ESCAPE '\\'
+                        LOWER(dt.table_name) LIKE :tableNameKeyword ESCAPE '\\\\'
+                        OR TRIM(
+                            CASE
+                                WHEN LOWER(dt.table_name) LIKE 'bàn %' THEN SUBSTRING(LOWER(dt.table_name), 5)
+                                ELSE LOWER(dt.table_name)
+                            END
+                        ) LIKE :tableNameKeyword ESCAPE '\\\\'
                      )
                     """);
-            params.put("keyword", NativeSqlTupleUtils.escapeLike(request.getKeyword().trim().toLowerCase()) + "%");
+            String tableNameKeyword = "%" + NativeSqlTupleUtils.escapeLike(request.getKeyword().trim().toLowerCase()) + "%";
+            params.put("tableNameKeyword", tableNameKeyword);
         }
 
         if (request.getFloor() != null) {
@@ -142,22 +158,30 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
         return sql.toString();
     }
 
-    private String buildCountWhere(TableSearchRequestDTO request, Map<String, Object> params) {
-        return buildWhere(request, params);
+    private void bindParameters(Query query, Map<String, Object> params) {
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            query.setParameter(entry.getKey(), entry.getValue());
+        }
     }
 
     private String buildOrderBy(String sortField, String sortDir) {
         String dbColumn = mapSortFieldToDbColumn(sortField);
-        String direction = "asc".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
-        return " ORDER BY " + (dbColumn != null ? dbColumn : "dt.id") + " " + direction + " ";
+
+        if (!StringUtils.hasText(dbColumn)) {
+            return " ORDER BY lastBookingTime DESC, dt.id DESC ";
+        }
+
+        String direction = "ASC".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
+        return " ORDER BY " + dbColumn + " " + direction + ", dt.id DESC ";
     }
 
     private String mapSortFieldToDbColumn(String sortField) {
-        if (sortField == null || sortField.isBlank()) {
+        if (!StringUtils.hasText(sortField)) {
             return null;
         }
 
-        return switch (sortField) {
+        return switch (sortField.trim()) {
+            case "id" -> "dt.id";
             case "tableCode" -> "dt.table_code";
             case "tableName" -> "dt.table_name";
             case "tableStatus" -> "dt.table_status";
@@ -165,7 +189,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
             case "slot" -> "dt.slot";
             case "totalBooking" -> "totalBooking";
             case "lastBookingTime" -> "lastBookingTime";
-            case "id" -> "dt.id";
+            case "active" -> "dt.is_active";
             default -> null;
         };
     }

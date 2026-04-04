@@ -69,7 +69,7 @@ public final class TableBookingSpec {
     }
 
     public static Sort resolveSort(String sortField, String sortDir) {
-        String resolvedField = ALLOWED_SORT_FIELDS.contains(sortField) ? sortField : "id";
+        String resolvedField = ALLOWED_SORT_FIELDS.contains(sortField) ? sortField : "bookingTime";
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         return Sort.by(direction, resolvedField);
     }

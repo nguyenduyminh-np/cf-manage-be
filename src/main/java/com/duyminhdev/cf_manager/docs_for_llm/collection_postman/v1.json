@@ -1,0 +1,458 @@
+{
+  "info": {
+    "name": "CF Manager - Full API (Auth + Business)",
+    "_postman_id": "0d5f8d03-4d0f-4ad4-9f0f-8e2e3a9c1b77",
+    "description": "Full collection to test Auth and all business controllers in PHASE 6.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "tableId", "value": "1" },
+    { "key": "bookingId", "value": "1" },
+    { "key": "dishId", "value": "1" },
+    { "key": "dishOrderId", "value": "1" },
+    { "key": "invoiceId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user_test_01\",\n  \"password\": \"123456\",\n  \"fullName\": \"User Test\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var jsonData = pm.response.json();",
+                  "  if (jsonData.accessToken) pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+                  "  if (jsonData.refreshToken) pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user_test_01\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var jsonData = pm.response.json();",
+                  "  if (jsonData.accessToken) pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+                  "  if (jsonData.refreshToken) pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/logout"
+          }
+        },
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin_test_01\",\n  \"password\": \"123456\",\n  \"fullName\": \"Admin Test\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register-admin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Table",
+      "item": [
+        {
+          "name": "Search Table",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 0,\n  \"limit\": 10,\n  \"sortField\": \"tableCode\",\n  \"sortDir\": \"asc\",\n  \"keyword\": \"A\",\n  \"floor\": 1,\n  \"slot\": 4,\n  \"tableStatus\": \"AVAILABLE\",\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table/search"
+          }
+        },
+        {
+          "name": "Table Detail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table/detail"
+          }
+        },
+        {
+          "name": "Table Update Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}},\n  \"tableStatus\": \"BOOKED\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table/update-status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Table Booking",
+      "item": [
+        {
+          "name": "Search Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 0,\n  \"limit\": 10,\n  \"sortField\": \"bookingTime\",\n  \"sortDir\": \"desc\",\n  \"tableId\": {{tableId}},\n  \"bookingStatus\": \"PENDING_CONFIRMATION\",\n  \"customerName\": \"Nguyen Van A\",\n  \"phoneNumber\": \"0987654321\",\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table-booking/search"
+          }
+        },
+        {
+          "name": "Create Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}},\n  \"bookingTime\": \"2026-12-31T19:00:00\",\n  \"customerName\": \"Nguyen Van A\",\n  \"phoneNumber\": \"0987654321\",\n  \"deposit\": 100000,\n  \"bookingStatus\": \"PENDING_CONFIRMATION\",\n  \"note\": \"Birthday booking\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table-booking/create"
+          }
+        },
+        {
+          "name": "Update Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{bookingId}},\n  \"tableId\": {{tableId}},\n  \"bookingTime\": \"2026-12-31T20:00:00\",\n  \"customerName\": \"Nguyen Van A\",\n  \"phoneNumber\": \"0987654321\",\n  \"deposit\": 150000,\n  \"bookingStatus\": \"CONFIRMED\",\n  \"note\": \"Updated booking\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table-booking/update"
+          }
+        },
+        {
+          "name": "Update Booking Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{bookingId}},\n  \"bookingStatus\": \"CONFIRMED\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/table-booking/update-status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dish",
+      "item": [
+        {
+          "name": "List Dish",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"active\": true\n}" },
+            "url": "{{baseUrl}}/api/v1/dish/list"
+          }
+        },
+        {
+          "name": "Search Dish",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 0,\n  \"limit\": 10,\n  \"sortField\": \"dishName\",\n  \"sortDir\": \"asc\",\n  \"keyword\": \"ga\",\n  \"dishCategoryId\": 1,\n  \"active\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish/search"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dish Category",
+      "item": [
+        {
+          "name": "List Dish Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"active\": true\n}" },
+            "url": "{{baseUrl}}/api/v1/dish-category/list"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dish Order",
+      "item": [
+        {
+          "name": "List Order By Table",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish-order/list-by-table"
+          }
+        },
+        {
+          "name": "Create Dish Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}},\n  \"dishOrderStatus\": \"PROCESSING\",\n  \"dishOrderDetails\": [\n    {\n      \"dishId\": {{dishId}},\n      \"quantity\": 2,\n      \"note\": \"Less spicy\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish-order/create"
+          }
+        },
+        {
+          "name": "Update Dish Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishOrderId\": {{dishOrderId}},\n  \"tableId\": {{tableId}},\n  \"dishOrderStatus\": \"PROCESSING\",\n  \"dishOrderDetails\": [\n    {\n      \"dishId\": {{dishId}},\n      \"quantity\": 3,\n      \"note\": \"Update quantity\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish-order/update"
+          }
+        },
+        {
+          "name": "Update Dish Order Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishOrderId\": {{dishOrderId}},\n  \"dishOrderStatus\": \"DONE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish-order/update-status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dish Order Detail",
+      "item": [
+        {
+          "name": "List Detail By Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dishOrderId\": {{dishOrderId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish-order-detail/list-by-order"
+          }
+        },
+        {
+          "name": "List Grouped Dish By Table",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/dish-order-detail/list-by-table"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Method",
+      "item": [
+        {
+          "name": "List Payment Methods",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"active\": true\n}" },
+            "url": "{{baseUrl}}/api/v1/payment-method/list"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invoice",
+      "item": [
+        {
+          "name": "Count Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{baseUrl}}/api/v1/invoice/count"
+          }
+        },
+        {
+          "name": "Create Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableId\": {{tableId}},\n  \"paymentMethod\": \"CASH\",\n  \"paymentStatus\": \"PENDING\",\n  \"totalMoney\": 200000,\n  \"guestCount\": 2,\n  \"invoiceDetails\": [\n    {\n      \"dishId\": {{dishId}},\n      \"quantity\": 2,\n      \"unitPrice\": 100000\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/invoice/create"
+          }
+        },
+        {
+          "name": "Confirm Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": {{invoiceId}},\n  \"paymentStatus\": \"PAID\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/invoice/confirm-payment"
+          }
+        },
+        {
+          "name": "Invoice Detail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": {{invoiceId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/invoice/detail"
+          }
+        }
+      ]
+    }
+  ]
+}

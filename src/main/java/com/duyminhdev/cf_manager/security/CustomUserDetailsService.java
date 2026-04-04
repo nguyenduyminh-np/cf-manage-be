@@ -4,6 +4,7 @@ import com.duyminhdev.cf_manager.entity.Account;
 import com.duyminhdev.cf_manager.entity.AccountToken;
 import com.duyminhdev.cf_manager.repository.AccountRepository;
 import com.duyminhdev.cf_manager.repository.AccountTokenRepository;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -23,6 +24,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
+    @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Account account = accountRepo.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));

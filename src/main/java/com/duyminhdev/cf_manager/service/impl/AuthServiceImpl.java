@@ -54,7 +54,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    /**
+     * Đăng nhập bằng username/password và phát hành cặp token mới.
+     */
     public AuthResponse login(String username, String rawPassword) {
+        /**
+         * Flow login:
+         * 1. Authenticate với Spring Security
+         * 2. Load account theo username
+         * 3. Validate account đang active
+         * 4. Phát hành access/refresh token mới
+         */
         // Authenticate via Spring's DaoAuthenticationProvider
         // Must catch AuthenticationException here; otherwise ExceptionTranslationFilter
         // intercepts it at filter level → calls AuthenticationEntryPoint → returns 401
@@ -81,7 +91,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    /**
+     * Đăng ký tài khoản người dùng thường.
+     */
     public AuthResponse register(String username, String rawPassword, String fullName) {
+        /**
+         * Flow register user:
+         * 1. Kiểm tra trùng username
+         * 2. Build account với role mặc định
+         * 3. Save account mới
+         * 4. Phát hành token đăng nhập ngay
+         */
         if (accountRepo.existsByUsername(username)) {
             throw new DuplicatedUsernameException(username);
         }
@@ -94,7 +114,18 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    /**
+     * Làm mới access token bằng refresh token hợp lệ.
+     */
     public AuthResponse refresh(String refreshToken) {
+        /**
+         * Flow refresh token:
+         * 1. Tìm refresh token còn hiệu lực
+         * 2. Validate account đang active
+         * 3. Validate TTL của refresh token
+         * 4. Revoke token cũ
+         * 5. Phát hành token mới
+         */
         AccountToken token = tokenRepo.findByRefreshTokenAndRevokedFalse(refreshToken)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
@@ -119,7 +150,16 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    /**
+     * Đăng xuất bằng cách thu hồi refresh token hiện tại.
+     */
     public AuthResponse logout(String refreshToken) {
+        /**
+         * Flow logout:
+         * 1. Tìm refresh token còn hiệu lực
+         * 2. Đánh dấu token revoked
+         * 3. Trả kết quả đăng xuất thành công
+         */
         AccountToken token = tokenRepo.findByRefreshTokenAndRevokedFalse(refreshToken)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
@@ -134,7 +174,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    /**
+     * Đăng ký tài khoản quản trị viên.
+     */
     public AuthResponse registerAdmin(String username, String rawPassword, String fullName) {
+        /**
+         * Flow register admin:
+         * 1. Kiểm tra trùng username
+         * 2. Build account với role ADMIN
+         * 3. Save account mới
+         * 4. Phát hành token đăng nhập ngay
+         */
         if (accountRepo.existsByUsername(username)) {
             throw new DuplicatedUsernameException(username);
         }

@@ -1,4 +1,4 @@
-package com.duyminhdev.cf_manager.repository.impl;
+package com.duyminhdev.cf_manager.utils;
 
 import jakarta.persistence.Tuple;
 

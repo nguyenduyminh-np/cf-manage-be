@@ -1,6 +1,8 @@
 package com.duyminhdev.cf_manager.repository.impl;
 
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.repository.NativeSqlInvoiceRepository;
+import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;

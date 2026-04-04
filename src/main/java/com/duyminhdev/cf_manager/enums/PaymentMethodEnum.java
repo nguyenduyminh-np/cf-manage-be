@@ -9,11 +9,13 @@ import java.util.Arrays;
 @Getter
 @RequiredArgsConstructor
 public enum PaymentMethodEnum implements EnumCodeSupport {
-    CASH("CASH", "Tiền mặt"),
-    BANK_TRANSFER("BANK_TRANSFER", "Chuyển khoản");
+    CASH("CASH", "Tiền mặt", true, 1),
+    BANK_TRANSFER("BANK_TRANSFER", "Chuyển khoản", true, 2);
 
     private final String code;
     private final String label;
+    private final boolean active;
+    private final int displayOrder;
 
     public static PaymentMethodEnum fromCode(String code) {
         return Arrays.stream(values())

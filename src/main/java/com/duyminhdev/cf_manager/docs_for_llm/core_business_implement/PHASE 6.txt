@@ -1,18 +1,24 @@
-Bắt đầu **PHASE 6 — Controller layer**.
+﻿Báº¯t Ä‘áº§u **PHASE 6 â€” Controller layer**.
 
-Phase này mình khóa theo 4 nguyên tắc đã chốt:
+Phase nÃ y mÃ¬nh khÃ³a theo 4 nguyÃªn táº¯c Ä‘Ã£ chá»‘t:
 
-* **Tất cả API dùng POST**
-* **Controller chỉ nhận `@Valid @RequestBody`**
-* **Trả về `ApiResponse<T>` hoặc `ApiResponse<PageResponse<T>>`**
-* **Không viết business logic trong controller**, toàn bộ nghiệp vụ đã nằm ở service phase 5.
-  Điều này bám đúng tài liệu DTO architecture và flow service cũ của module TableList.
+* **Táº¥t cáº£ API dÃ¹ng POST**
+* **Controller chá»‰ nháº­n `@Valid @RequestBody`**
+* **Tráº£ vá» `ApiResponse<T>` hoáº·c `ApiResponse<PageResponse<T>>`**
+* **KhÃ´ng viáº¿t business logic trong controller**, toÃ n bá»™ nghiá»‡p vá»¥ Ä‘Ã£ náº±m á»Ÿ service phase 5.
+  Äiá»u nÃ y bÃ¡m Ä‘Ãºng tÃ i liá»‡u DTO architecture vÃ  flow service cÅ© cá»§a module TableList.
 
-Ngoài ra, màn hình cũ dùng 16 API cho 4 flow chính: hiển thị bàn, đặt bàn, gọi món, thanh toán. Phase 6 dưới đây map đúng các flow đó nhưng theo convention mới: **POST-only + DTO contract mới**. 
+NgoÃ i ra, mÃ n hÃ¬nh cÅ© dÃ¹ng 16 API cho 4 flow chÃ­nh: hiá»ƒn thá»‹ bÃ n, Ä‘áº·t bÃ n, gá»i mÃ³n, thanh toÃ¡n. Phase 6 dÆ°á»›i Ä‘Ã¢y map Ä‘Ãºng cÃ¡c flow Ä‘Ã³ nhÆ°ng theo convention má»›i: **POST-only + DTO contract má»›i**. 
 
 ---
 
-# PHASE 6 — CONTROLLER FULL CODE
+# PHASE 6 - CONTROLLER IMPLEMENTATION PLAN (CHUA IMPLEMENT)
+
+## 6.0. Trang thai thuc te
+
+- Tai lieu nay la plan/blueprint, chua phai code da merge vao `src/main/java/com/duyminhdev/cf_manager/controller`.
+- Muc tieu cua phase 6: sinh 8 controller cho cac service da co o phase 5.
+- Tieu chi done cua phase 6 se duoc tinh khi: tao du file controller, compile pass, va verify contract request/response.
 
 ---
 
@@ -25,11 +31,11 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.table.TableDetailRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.request.table.TableSearchRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.request.table.TableStatusUpdateRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.table.TableDetailResponseDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.table.TableSearchResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableSearchResponseDTO;
 import com.duyminhdev.cf_manager.service.TableService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -78,8 +84,8 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.table_booking.*;
-import com.duyminhdev.cf_manager.dto.crud.response.table_booking.TableBookingResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.*;
+import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
 import com.duyminhdev.cf_manager.service.TableBookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -135,9 +141,9 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.dish.DishListRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.request.dish.DishSearchRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.dish.DishResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.dish.DishListRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.dish.DishSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.dish.DishResponseDTO;
 import com.duyminhdev.cf_manager.service.DishService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -179,8 +185,8 @@ public class DishController {
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.dish_category.DishCategoryListRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.dish_category.DishCategoryResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.dish_category.DishCategoryListRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_category.DishCategoryResponseDTO;
 import com.duyminhdev.cf_manager.service.DishCategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -214,8 +220,8 @@ public class DishCategoryController {
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.dish_order.*;
-import com.duyminhdev.cf_manager.dto.crud.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.dish_order.*;
+import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
 import com.duyminhdev.cf_manager.service.DishOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -270,10 +276,10 @@ public class DishOrderController {
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByOrderRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.request.dish_order_detail.DishOrderDetailListByTableRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishGroupedByTableResponseDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.dish_order_detail.DishOrderDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.dish_order_detail.DishOrderDetailListByOrderRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.dish_order_detail.DishOrderDetailListByTableRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order_detail.DishGroupedByTableResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order_detail.DishOrderDetailResponseDTO;
 import com.duyminhdev.cf_manager.service.DishOrderDetailService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -314,8 +320,8 @@ public class DishOrderDetailController {
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.payment_method.PaymentMethodListRequestDTO;
-import com.duyminhdev.cf_manager.dto.crud.response.payment_method.PaymentMethodResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.payment_method.PaymentMethodListRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.payment_method.PaymentMethodResponseDTO;
 import com.duyminhdev.cf_manager.service.PaymentMethodService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -349,8 +355,8 @@ public class PaymentMethodController {
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.crud.request.invoice.*;
-import com.duyminhdev.cf_manager.dto.crud.response.invoice.*;
+import com.duyminhdev.cf_manager.dto.request.invoice.*;
+import com.duyminhdev.cf_manager.dto.response.invoice.*;
 import com.duyminhdev.cf_manager.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -396,9 +402,9 @@ public class InvoiceController {
 
 ---
 
-# 6.9. API mapping cuối cùng sau Phase 6
+# 6.9. API mapping cuá»‘i cÃ¹ng sau Phase 6
 
-Dựa trên flow màn hình cũ và service cũ, bộ API mới sau phase này là:
+Dá»±a trÃªn flow mÃ n hÃ¬nh cÅ© vÃ  service cÅ©, bá»™ API má»›i sau phase nÃ y lÃ :
 
 ## Table
 
@@ -445,144 +451,93 @@ Dựa trên flow màn hình cũ và service cũ, bộ API mới sau phase này l
 * `POST /api/v1/invoice/confirm-payment`
 * `POST /api/v1/invoice/detail`
 
-Bộ này giữ nguyên semantic của 16 API cũ nhưng đã được chuẩn hóa theo convention POST-only mới của bạn.
+Bá»™ nÃ y giá»¯ nguyÃªn semantic cá»§a 16 API cÅ© nhÆ°ng Ä‘Ã£ Ä‘Æ°á»£c chuáº©n hÃ³a theo convention POST-only má»›i cá»§a báº¡n.
 
 ---
 
-# 6.10. Patch rất nên làm ngay: validation handler
+# 6.10. Giai thich chi tiet cac mismatch can xu ly truoc khi implement
 
-Hiện `GlobalExceptionHandler` mới có `InvalidDataException`, `DuplicatedUsernameException`, `Exception`, nhưng **chưa có** handler cho `MethodArgumentNotValidException`. Trong khi phase 6 controller đang dùng `@Valid @RequestBody` khá nhiều. Base project hiện đã có `GlobalExceptionHandler`, nên nên patch luôn để validation message trả đẹp. 
+## 6.10.1. DTO package mismatch (quan trong nhat)
 
-## 6.10.1. Patch `GlobalExceptionHandler.java`
+- Ban draft cu dung `com.duyminhdev.cf_manager.dto.crud.request.*` va `dto.crud.response.*`.
+- Codebase hien tai dang dung `com.duyminhdev.cf_manager.dto.request.*` va `dto.response.*`.
+- Neu copy draft cu vao controller that se loi compile ngay (cannot resolve symbol package).
+- Ban plan nay da doi import ve dung package hien tai de khi implement tranh sai ngay tu dau.
 
-```java id="4szl5b"
-package com.duyminhdev.cf_manager.exceptions;
+## 6.10.2. Mismatch trang thai thuc thi
 
-import com.duyminhdev.cf_manager.dto.base.ErrorResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
+- Tai thoi diem hien tai project moi co `AuthController`, cac controller phase 6 chua tao.
+- Vi vay, phase 6 hien la plan, chua co endpoint runtime cho table/booking/order/payment.
 
-import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
+## 6.10.3. Quy uoc input da chot
 
-@RestControllerAdvice
-public class GlobalExceptionHandler {
+- Nguyen tac tong quat: cac API mutate (create/update/update-status/confirm-payment/detail/search co filter) dung `@Valid @RequestBody`.
+- Ngoai le da chot de giu tinh linh hoat: `dish/list`, `dish-category/list`, `payment-method/list`, `invoice/count` duoc phep `@RequestBody(required = false)`.
+- Neu request body null, controller tao `safeRequest = new XxxRequestDTO()` va goi service voi gia tri mac dinh.
+- API docs can ghi ro 2 nhom endpoint tren de FE khong hieu sai contract.
 
-    private ResponseEntity<ErrorResponse> build(
-            HttpStatus status,
-            String code,
-            String message,
-            Object details,
-            HttpServletRequest req) {
-        return ResponseEntity.status(status).body(
-                ErrorResponse.builder()
-                        .timestamp(OffsetDateTime.now())
-                        .status(status.value())
-                        .error(status.getReasonPhrase())
-                        .code(code)
-                        .message(message)
-                        .details(details)
-                        .path(req.getRequestURI())
-                        .build());
-    }
+## 6.10.4. Mismatch xu ly validation error
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex,
-            HttpServletRequest req) {
+- Neu dung `@Valid`, can bo sung `MethodArgumentNotValidException` handler trong `GlobalExceptionHandler`.
+- Neu khong bo sung, loi validation van bi bat, nhung format thong diep se khong dong bo voi khung `ErrorResponse` mong muon.
 
-        Map<String, String> fieldErrors = new LinkedHashMap<>();
-        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
-            fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
-        }
+---
 
-        return build(
-                HttpStatus.BAD_REQUEST,
-                "VALIDATION_ERROR",
-                "Request validation failed",
-                fieldErrors,
-                req
-        );
-    }
+# 6.11. Exception handler plan + HTTP status mapping (theo format project hien tai)
 
-    @ExceptionHandler(InvalidDataException.class)
-    public ResponseEntity<ErrorResponse> invalidData(
-            InvalidDataException ex,
-            HttpServletRequest req) {
-        return build(HttpStatus.BAD_REQUEST,
-                "INVALID_DATA",
-                ex.getMessage(),
-                null,
-                req);
-    }
+## 6.11.1. Format response loi chuan cua project
 
-    @ExceptionHandler(DuplicatedUsernameException.class)
-    public ResponseEntity<ErrorResponse> duplicatedUsername(
-            DuplicatedUsernameException ex,
-            HttpServletRequest req) {
-        return build(HttpStatus.CONFLICT,
-                "DUPLICATED_USERNAME",
-                ex.getMessage(),
-                null,
-                req);
-    }
+Format can giu dung theo `ErrorResponse` hien tai:
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(
-            Exception ex,
-            HttpServletRequest req) {
-        ex.printStackTrace();
-        return build(HttpStatus.INTERNAL_SERVER_ERROR,
-                "INTERNAL_SERVER_ERROR",
-                "An unexpected error occurred",
-                ex.getMessage(),
-                req);
-    }
+```json
+{
+  "timestamp": "2026-03-31T10:15:30+07:00",
+  "status": 400,
+  "error": "Bad Request",
+  "code": "VALIDATION_ERROR",
+  "message": "Request validation failed",
+  "details": {
+    "fieldA": "must not be blank"
+  },
+  "path": "/api/v1/table/search"
 }
 ```
 
----
+## 6.11.2. Ma tran exception -> HTTP status
 
-# 6.11. 3 lưu ý rất quan trọng sau Phase 6
+1. `MethodArgumentNotValidException` -> `400 Bad Request`
+2. `InvalidDataException` -> `400 Bad Request`
+3. `DuplicatedUsernameException` -> `409 Conflict`
+4. `AuthenticationException` (qua `CustomAuthenticationEntryPoint`) -> `401 Unauthorized`
+5. `AccessDeniedException` (qua `CustomAccessDeniedHandler`) -> `403 Forbidden`
+6. `Exception` fallback -> `500 Internal Server Error`
 
-## 1. Các API `list`/`count` đang cho phép body null
+## 6.11.3. Error code de xai nhat quan
 
-Mình cố tình để:
+1. `VALIDATION_ERROR`
+2. `INVALID_DATA`
+3. `DUPLICATED_USERNAME`
+4. `AUTH_UNAUTHORIZED`
+5. `ACCESS_DENIED`
+6. `INTERNAL_SERVER_ERROR`
 
-* `DishListRequestDTO`
-* `DishCategoryListRequestDTO`
-* `PaymentMethodListRequestDTO`
-* `InvoiceCountRequestDTO`
-  có thể nhận `null body`, rồi controller tự tạo request mặc định. Điều này giúp frontend gọi nhẹ hơn.
+## 6.11.4. Ke hoach patch handler (plan, chua implement)
 
-## 2. Security hiện tại không cần sửa route whitelist
-
-Các controller mới không cần whitelist, vì nghiệp vụ table/booking/order/payment đều phải qua JWT. `SecurityConfig` hiện đang để mọi route ngoài `/api/v1/auth/**` đều authenticated, phù hợp với bài toán này. 
-
-## 3. Controller chỉ orchestration, không chứa business
-
-Điều này bám đúng tài liệu DTO architecture và service explain cũ:
-
-* validation rìa ở request DTO
-* orchestration ở controller
-* nghiệp vụ ở service
-* data access ở repository/spec/native repository.
+1. Them `@ExceptionHandler(MethodArgumentNotValidException.class)` vao `GlobalExceptionHandler`.
+2. Trich field errors vao `details` dang map `field -> message`.
+3. Giu nguyen format `build(...)` de khong vo JSON contract hien tai.
+4. Khong doi logic cua `CustomAuthenticationEntryPoint` va `CustomAccessDeniedHandler`, chi verify code/status/message map dung ma tran tren.
 
 ---
 
-# Kết quả sau Phase 6
+# 6.12. Trang thai giao pha Phase 6 -> Phase 7
 
-Sau phase này bạn đã có:
+- Phase 6 hien dang o trang thai plan, CHUA IMPLEMENT.
+- Dau ra mong doi sau khi implement:
+1. Tao du 8 file controller theo cac block mau tren.
+2. Compile pass voi package DTO hien tai.
+3. Bo sung validation handler vao `GlobalExceptionHandler` theo ma tran HTTP da chot.
+4. Verify response loi dung schema `ErrorResponse` toan project.
 
-* đủ **8 controller**
-* đủ route POST cho toàn bộ module TableList
-* response bọc `ApiResponse<T>`
-* controller/service/repository/DTO/mapping được nối hoàn chỉnh theo kiến trúc đã chốt
+Phase tiep theo nen la: implement controller theo plan + patch exception handlers + compile check.
 
-Bước tiếp theo hợp lý nhất là **PHASE 7 — rà compile/runtime issues + patch các điểm lệch giữa Phase 1→6 để code build sạch**.

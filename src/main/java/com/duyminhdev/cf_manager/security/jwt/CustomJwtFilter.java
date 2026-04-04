@@ -55,39 +55,60 @@ public class CustomJwtFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
 
         try {
+            log.info("✓ Token header found, extracting username...");
+            
             // 1) Extract username from JWT
             String username = jwtService.extractUsername(token);
+            log.info("✓ Username extracted: {}", username);
 
             // 2) Load user details (includes active JTI from AccountToken)
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            log.info("✓ User details loaded for username: {}", username);
 
             // 3) Validate signature + expiration
-            if (!(userDetails instanceof CustomUserDetail cud) || !jwtService.validateToken(token, cud)) {
+            if (!(userDetails instanceof CustomUserDetail cud)) {
+                log.error("✗ UserDetails is not CustomUserDetail instance");
                 filterChain.doFilter(request, response);
                 return;
             }
+
+            if (!jwtService.validateToken(token, cud)) {
+                log.error("✗ Token signature or expiration validation failed for user: {}", username);
+                filterChain.doFilter(request, response);
+                return;
+            }
+            log.info("✓ Token signature and expiration validated");
 
             // 4) **CRUCIAL**: JTI check for instant revocation
             String tokenJti = jwtService.extractJti(token);
             String activeJti = cud.getJti();
+            log.info("✓ JTI comparison - tokenJti: {}, activeJti: {}", tokenJti, activeJti);
 
-            if (activeJti == null || !activeJti.equals(tokenJti)) {
-                log.debug("JWT rejected by JTI check. username={}, tokenJti={}, activeJti={}",
+            if (activeJti == null) {
+                log.error("✗ activeJti is NULL - no active token found in database for user: {}", username);
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (!activeJti.equals(tokenJti)) {
+                log.error("✗ JWT rejected by JTI check. User: {}, tokenJti: {}, activeJti: {} (MISMATCH)",
                         username, tokenJti, activeJti);
                 filterChain.doFilter(request, response);
                 return;
             }
+            log.info("✓ JTI validation passed");
 
             // 5) Set authentication in SecurityContext
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authToken);
+            log.info("✓ Authentication set in SecurityContext for user: {}", username);
 
         } catch (UsernameNotFoundException e) {
-            log.warn("JWT user not found: {}", e.getMessage());
+            log.error("✗ User not found in database: {}", e.getMessage());
         } catch (Exception e) {
-            log.debug("JWT filter error: {}", e.getMessage());
+            log.error("✗ JWT filter error: {}", e.getMessage(), e);
         }
 
         filterChain.doFilter(request, response);

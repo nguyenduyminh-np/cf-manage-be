@@ -21,7 +21,7 @@ public class TableSearchRequestDTO extends PageFilterRequest {
     @Max(value = 1000, message = "slot must be <= 1000")
     private Integer slot;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid tableStatus code")
+  //  @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid tableStatus code")
     private String tableStatus;
 
     private Boolean active;

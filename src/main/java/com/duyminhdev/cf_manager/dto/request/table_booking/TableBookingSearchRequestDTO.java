@@ -13,12 +13,12 @@ import java.time.LocalDateTime;
 public class TableBookingSearchRequestDTO extends PageFilterRequest {
     private Integer tableId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
+    //@Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
     private String bookingStatus;
 
     private String customerName;
 
-    @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Invalid phone number")
+  //  @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Invalid phone number")
     private String phoneNumber;
 
     private LocalDateTime bookingFrom;

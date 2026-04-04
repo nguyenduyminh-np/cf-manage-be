@@ -17,7 +17,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.*;
 
 import java.util.List;
@@ -44,24 +43,13 @@ public class SecurityConfig {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            log.error("Request is missing token - uri={}", request.getRequestURI());
-                            customAuthenticationEntryPoint.commence(request, response, authException);
-                        })
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            log.error("User does not have permission - uri={}", request.getRequestURI());
-                            customAccessDeniedHandler.handle(request, response, accessDeniedException);
-                        }))
-
-                // Spring Security 6: auto DaoAuthenticationProvider from UserDetailsService + PasswordEncoder beans
+            // Temporarily disable auth enforcement so FE can test API connectivity without JWT.
                 .authorizeHttpRequests(req -> req
                         .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
-                        .requestMatchers(WHITE_LIST_URL).permitAll()
-                        .anyRequest().authenticated())
-                .addFilterBefore(customJwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .requestMatchers(WHITE_LIST_URL).permitAll()
+                .anyRequest().permitAll());
 
         return http.build();
     }
