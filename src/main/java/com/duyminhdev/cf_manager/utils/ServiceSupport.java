@@ -66,12 +66,24 @@ public class ServiceSupport {
     /**
      * check thời gian đặt bàn
      */
-    public void validateBookingTime(LocalDateTime bookingTime) {
-        if (bookingTime == null) {
-            throw new InvalidDataException("bookingTime is required");
+    public void validateExpectedArriveTime(LocalDateTime expectedArriveTime) {
+        if (expectedArriveTime == null) {
+            throw new InvalidDataException("expectedArriveTime is required");
         }
-        if (bookingTime.isBefore(LocalDateTime.now())) {
-            throw new InvalidDataException("bookingTime must not be in the past");
+        if (expectedArriveTime.isBefore(LocalDateTime.now())) {
+            throw new InvalidDataException("expectedArriveTime must not be in the past");
+        }
+    }
+
+    public void validateExpectedCheckoutTime(LocalDateTime expectedArriveTime, LocalDateTime expectedCheckOut) {
+        if (expectedArriveTime == null) {
+            throw new InvalidDataException("expectedArriveTime is required");
+        }
+        if (expectedCheckOut == null) {
+            throw new InvalidDataException("expectedCheckOut is required");
+        }
+        if (expectedCheckOut.isBefore(expectedArriveTime) || expectedCheckOut.isEqual(expectedArriveTime)) {
+            throw new InvalidDataException("expectedCheckOut must be greater than expectedArriveTime");
         }
     }
 

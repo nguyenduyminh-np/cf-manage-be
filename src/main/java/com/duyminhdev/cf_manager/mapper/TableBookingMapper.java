@@ -13,18 +13,20 @@ public interface TableBookingMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "table", ignore = true)
     @Mapping(target = "account", ignore = true)
-    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "active", ignore = true)
-    @Mapping(target = "checkInTime", ignore = true)
+    @Mapping(target = "checkInAt", ignore = true)
+    @Mapping(target = "checkOutAt", ignore = true)
     TableBooking toNewEntity(TableBookingCreateRequestDTO request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "table", ignore = true)
     @Mapping(target = "account", ignore = true)
-    @Mapping(target = "createdTime", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "active", ignore = true)
-    @Mapping(target = "checkInTime", ignore = true)
+    @Mapping(target = "checkInAt", ignore = true)
+    @Mapping(target = "checkOutAt", ignore = true)
     void updateEntityFromRequest(TableBookingUpdateRequestDTO request, @MappingTarget TableBooking entity);
 
     @Mapping(target = "bookingId", source = "id")

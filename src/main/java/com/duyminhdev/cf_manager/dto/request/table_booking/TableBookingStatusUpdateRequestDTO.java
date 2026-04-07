@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 public class TableBookingStatusUpdateRequestDTO {
@@ -16,4 +18,8 @@ public class TableBookingStatusUpdateRequestDTO {
 
     @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
     private String bookingStatus;
+
+    private LocalDateTime checkInAt;
+
+    private LocalDateTime checkOutAt;
 }

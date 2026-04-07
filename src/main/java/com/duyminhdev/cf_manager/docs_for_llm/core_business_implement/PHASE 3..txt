@@ -583,7 +583,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
                 dt.floor AS floor,
                 dt.slot AS slot,
                 COALESCE(COUNT(tb.id), 0) AS totalBooking,
-                MAX(tb.booking_at) AS lastBookingTime,
+                MAX(tb.expected_arrive_time) AS lastBookingTime,
                 dt.is_active AS active
             """;
 

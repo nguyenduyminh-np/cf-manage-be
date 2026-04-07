@@ -30,8 +30,8 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             where tb.table.id = :tableId
               and tb.active = true
               and upper(tb.bookingStatus) in :statuses
-              and tb.bookingTime >= :fromTime
-              and tb.bookingTime <= :toTime
+                                                        and tb.expectedArriveTime >= :fromTime
+                                                        and tb.expectedArriveTime <= :toTime
             """)
     boolean existsUpcomingActiveBookingByTableIdAndStatuses(
             @Param("tableId") Integer tableId,

@@ -1,8 +1,7 @@
 package com.duyminhdev.cf_manager.dto.request.table_booking;
 
-import com.duyminhdev.cf_manager.constant.ValidateValueConstants;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.duyminhdev.cf_manager.dto.base.PageFilterRequest;
-import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,12 +17,13 @@ public class TableBookingSearchRequestDTO extends PageFilterRequest {
 
     private String customerName;
 
-  //  @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Invalid phone number")
     private String phoneNumber;
 
-    private LocalDateTime bookingFrom;
+    @JsonAlias("bookingFrom")
+    private LocalDateTime expectedArriveFrom;
 
-    private LocalDateTime bookingTo;
+    @JsonAlias("bookingTo")
+    private LocalDateTime expectedArriveTo;
 
     private Boolean active;
 }

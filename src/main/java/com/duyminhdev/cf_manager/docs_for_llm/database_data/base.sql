@@ -986,7 +986,7 @@ DROP TABLE IF EXISTS `table_booking`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `table_booking` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `booking_at` datetime NOT NULL,
+  `expected_arrive_time` datetime NOT NULL,
   `check_in_at` datetime DEFAULT NULL,
   `booking_status` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `deposit_amount` decimal(18,0) DEFAULT NULL,

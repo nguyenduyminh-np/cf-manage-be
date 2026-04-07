@@ -18,15 +18,17 @@ public class TableBookingResponseDTO {
     private String tableCode;
     private String tableName;
 
-    private LocalDateTime bookingTime;
-    private LocalDateTime checkInTime;
+    private LocalDateTime expectedArriveTime;
+    private LocalDateTime checkInAt;
+    private LocalDateTime expectedCheckOut;
+    private LocalDateTime checkOutAt;
 
     private String bookingStatus;
     private String bookingStatusName;
 
     private String customerName;
     private String phoneNumber;
-    private BigDecimal deposit;
+    private BigDecimal depositAmount;
     private String note;
 
     private Integer accountId;
@@ -34,6 +36,6 @@ public class TableBookingResponseDTO {
     private String accountFullName;
 
     private Boolean active;
-    private LocalDateTime createdTime;
+    private LocalDateTime createdAt;
 }
 

@@ -18,13 +18,15 @@ public final class TableBookingSpec {
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id",
-            "bookingTime",
-            "checkInTime",
+            "expectedArriveTime",
+            "checkInAt",
+            "expectedCheckOut",
+            "checkOutAt",
             "bookingStatus",
             "customerName",
             "phoneNumber",
-            "deposit",
-            "createdTime"
+            "depositAmount",
+            "createdAt"
     );
 
     public static Specification<TableBooking> byCriteria(TableBookingSearchRequestDTO request) {
@@ -52,12 +54,12 @@ public final class TableBookingSpec {
                 predicates.add(cb.like(cb.lower(root.get("phoneNumber")), value, '\\'));
             }
 
-            if (request.getBookingFrom() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("bookingTime"), request.getBookingFrom()));
+            if (request.getExpectedArriveFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("expectedArriveTime"), request.getExpectedArriveFrom()));
             }
 
-            if (request.getBookingTo() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("bookingTime"), request.getBookingTo()));
+            if (request.getExpectedArriveTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("expectedArriveTime"), request.getExpectedArriveTo()));
             }
 
             if (request.getActive() != null) {
@@ -69,7 +71,7 @@ public final class TableBookingSpec {
     }
 
     public static Sort resolveSort(String sortField, String sortDir) {
-        String resolvedField = ALLOWED_SORT_FIELDS.contains(sortField) ? sortField : "bookingTime";
+        String resolvedField = ALLOWED_SORT_FIELDS.contains(sortField) ? sortField : "expectedArriveTime";
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         return Sort.by(direction, resolvedField);
     }

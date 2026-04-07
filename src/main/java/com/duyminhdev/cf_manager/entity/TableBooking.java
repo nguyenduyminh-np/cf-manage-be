@@ -13,20 +13,26 @@ public class TableBooking {
     @Column(name = "id")
     private Integer id;
 
-    @Column(name = "booking_at", nullable = false)
-    private LocalDateTime bookingTime;
+    @Column(name = "expected_arrive_time", nullable = false)
+    private LocalDateTime expectedArriveTime;
 
     @Column(name = "check_in_at")
-    private LocalDateTime checkInTime;
+    private LocalDateTime checkInAt;
+
+    @Column(name = "expected_check_out")
+    private LocalDateTime expectedCheckOut;
+
+    @Column(name = "check_out_at")
+    private LocalDateTime checkOutAt;
 
     @Column(name = "booking_status", nullable = false, length = 255)
     private String bookingStatus;
 
     @Column(name = "deposit_amount", precision = 18, scale = 0)
-    private BigDecimal deposit;
+    private BigDecimal depositAmount;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private LocalDateTime createdAt;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")

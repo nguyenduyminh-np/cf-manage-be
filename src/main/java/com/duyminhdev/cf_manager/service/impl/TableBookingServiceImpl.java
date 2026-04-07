@@ -36,13 +36,15 @@ public class TableBookingServiceImpl implements TableBookingService {
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id",
-            "bookingTime",
-            "checkInTime",
+            "expectedArriveTime",
+            "checkInAt",
+            "expectedCheckOut",
+            "checkOutAt",
             "bookingStatus",
             "customerName",
             "phoneNumber",
-            "deposit",
-            "createdTime"
+            "depositAmount",
+            "createdAt"
     );
 
     private final TableBookingRepository tableBookingRepository;
@@ -99,9 +101,9 @@ public class TableBookingServiceImpl implements TableBookingService {
     private String resolveSortFieldOrDefault(String sortField) {
         String normalized = trimToNull(sortField);
         if (normalized == null) {
-            return "bookingTime";
+            return "expectedArriveTime";
         }
-        return ALLOWED_SORT_FIELDS.contains(normalized) ? normalized : "bookingTime";
+        return ALLOWED_SORT_FIELDS.contains(normalized) ? normalized : "expectedArriveTime";
     }
 
     private String resolveSortDirOrDefault(String sortDir) {
@@ -118,7 +120,8 @@ public class TableBookingServiceImpl implements TableBookingService {
     @Override
     @Transactional
     public TableBookingResponseDTO create(TableBookingCreateRequestDTO request) {
-        serviceSupport.validateBookingTime(request.getBookingTime());
+        serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
+        serviceSupport.validateExpectedCheckoutTime(request.getExpectedArriveTime(), request.getExpectedCheckOut());
 
         String bookingStatus = request.getBookingStatus();
         if (bookingStatus == null || bookingStatus.isBlank()) {
@@ -133,7 +136,7 @@ public class TableBookingServiceImpl implements TableBookingService {
         entity.setBookingStatus(BookingStatusEnum.fromCode(bookingStatus).getCode());
         entity.setTable(table);
         entity.setAccount(account);
-        entity.setCreatedTime(LocalDateTime.now());
+        entity.setCreatedAt(LocalDateTime.now());
         entity.setActive(true);
 
         TableBooking saved = tableBookingRepository.save(entity);
@@ -146,7 +149,8 @@ public class TableBookingServiceImpl implements TableBookingService {
     @Override
     @Transactional
     public TableBookingResponseDTO update(TableBookingUpdateRequestDTO request) {
-        serviceSupport.validateBookingTime(request.getBookingTime());
+        serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
+        serviceSupport.validateExpectedCheckoutTime(request.getExpectedArriveTime(), request.getExpectedCheckOut());
 
         String bookingStatus = request.getBookingStatus();
         if (bookingStatus == null || bookingStatus.isBlank()) {
@@ -186,11 +190,49 @@ public class TableBookingServiceImpl implements TableBookingService {
                         "Booking not found with id: " + request.getBookingId()
                 ));
 
-        existing.setBookingStatus(BookingStatusEnum.fromCode(request.getBookingStatus()).getCode());
+        BookingStatusEnum newStatus = BookingStatusEnum.fromCode(request.getBookingStatus());
+        existing.setBookingStatus(newStatus.getCode());
+        applyCheckInCheckOutTimes(existing, newStatus, request);
+
         tableBookingRepository.save(existing);
 
         serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
 
         return true;
+    }
+
+    private void applyCheckInCheckOutTimes(
+            TableBooking booking,
+            BookingStatusEnum newStatus,
+            TableBookingStatusUpdateRequestDTO request
+    ) {
+        LocalDateTime resolvedCheckInAt = request.getCheckInAt() != null
+                ? request.getCheckInAt()
+                : booking.getCheckInAt();
+
+        LocalDateTime resolvedCheckOutAt = request.getCheckOutAt() != null
+                ? request.getCheckOutAt()
+                : booking.getCheckOutAt();
+
+        if (newStatus.isCompleted()) {
+            if (resolvedCheckInAt == null) {
+                resolvedCheckInAt = LocalDateTime.now();
+            }
+            if (resolvedCheckOutAt == null) {
+                resolvedCheckOutAt = LocalDateTime.now();
+            }
+        }
+
+        if (resolvedCheckOutAt != null && resolvedCheckInAt == null) {
+            throw new InvalidDataException("checkInAt is required when checkOutAt is provided");
+        }
+
+        if (resolvedCheckInAt != null && resolvedCheckOutAt != null
+                && resolvedCheckOutAt.isBefore(resolvedCheckInAt)) {
+            throw new InvalidDataException("checkOutAt must be >= checkInAt");
+        }
+
+        booking.setCheckInAt(resolvedCheckInAt);
+        booking.setCheckOutAt(resolvedCheckOutAt);
     }
 }
