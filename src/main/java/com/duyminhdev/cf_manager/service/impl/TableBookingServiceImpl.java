@@ -17,6 +17,7 @@ import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
 import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.spec.TableBookingSpec;
+import com.duyminhdev.cf_manager.service.booking.BookingUseCaseService;
 import com.duyminhdev.cf_manager.service.TableBookingService;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingTransitionContext;
@@ -59,6 +60,7 @@ public class TableBookingServiceImpl implements TableBookingService {
     private final BookingStateMachine bookingStateMachine;
     private final BookingLockService bookingLockService;
     private final BookingDomainEventPublisher bookingDomainEventPublisher;
+    private final BookingUseCaseService bookingUseCaseService;
 
     @Override
     public PageResponse<List<TableBookingResponseDTO>> search(TableBookingSearchRequestDTO request) {
@@ -129,40 +131,8 @@ public class TableBookingServiceImpl implements TableBookingService {
     @Override
     @Transactional
     public TableBookingResponseDTO create(TableBookingCreateRequestDTO request) {
-        return bookingLockService.executeWithTableLock(request.getTableId(), () -> {
-            serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
-            serviceSupport.validateBookingTimes(
-                request.getExpectedArriveTime(),
-                request.getExpectedCheckOut(),
-                null,
-                null
-            );
-
-            String bookingStatus = request.getBookingStatus();
-            if (bookingStatus == null || bookingStatus.isBlank()) {
-                bookingStatus = BookingStatusEnum.PENDING.getCode();
-            }
-            BookingStatusEnum targetStatus = BookingStatusEnum.fromCode(bookingStatus);
-            serviceSupport.validateBookingStatusCode(targetStatus.getCode());
-
-            TableEntity table = serviceSupport.getActiveTable(request.getTableId());
-            Account account = serviceSupport.getCurrentAccount();
-
-            TableBooking entity = tableBookingMapper.toNewEntity(request);
-            entity.setTable(table);
-            entity.setAccount(account);
-            entity.setCreatedAt(LocalDateTime.now());
-            entity.setActive(true);
-
-            bookingStateMachine.initialize(entity, targetStatus);
-
-            TableBooking saved = tableBookingRepository.save(entity);
-
-            serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
-            bookingDomainEventPublisher.publish(BookingMutationType.CREATE, saved.getId(), saved.getTable().getId());
-
-            return tableBookingMapper.toResponseDTO(saved);
-        });
+        TableBooking saved = bookingUseCaseService.createBooking(request);
+        return tableBookingMapper.toResponseDTO(saved);
     }
 
     @Override
@@ -229,37 +199,17 @@ public class TableBookingServiceImpl implements TableBookingService {
     public Boolean updateStatus(TableBookingStatusUpdateRequestDTO request) {
         serviceSupport.validateBookingStatusCode(request.getBookingStatus());
 
-        TableBooking beforeLock = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
-                .orElseThrow(() -> new InvalidDataException(
-                        "Booking not found with id: " + request.getBookingId()
-                ));
+        BookingStatusEnum targetStatus = BookingStatusEnum.fromCode(request.getBookingStatus());
 
-        Integer tableId = beforeLock.getTable() != null ? beforeLock.getTable().getId() : null;
-        return bookingLockService.executeWithTableLock(tableId, () -> {
-            TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
-                    .orElseThrow(() -> new InvalidDataException(
-                            "Booking not found with id: " + request.getBookingId()
-                    ));
+        switch (targetStatus) {
+            case CONFIRMED -> bookingUseCaseService.confirmBooking(request.getBookingId());
+            case CHECKED_IN -> bookingUseCaseService.checkIn(request.getBookingId(), request.getCheckInAt(), false);
+            case COMPLETED -> bookingUseCaseService.checkOut(request.getBookingId(), request.getCheckOutAt());
+            case CANCELLED -> bookingUseCaseService.cancelBooking(request.getBookingId());
+            case EXPIRED -> bookingUseCaseService.expireBooking(request.getBookingId());
+            case PENDING -> throw new InvalidDataException("updateStatus does not support transition to PENDING_CONFIRMATION");
+        }
 
-            BookingStatusEnum targetStatus = BookingStatusEnum.fromCode(request.getBookingStatus());
-            bookingStateMachine.transition(BookingTransitionContext.builder()
-                .booking(existing)
-                .targetStatus(targetStatus)
-                .requestedCheckInAt(request.getCheckInAt())
-                .requestedCheckOutAt(request.getCheckOutAt())
-                .allowNoopTransition(true)
-                .build());
-
-            tableBookingRepository.save(existing);
-
-            serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
-                bookingDomainEventPublisher.publish(
-                    BookingMutationType.UPDATE_STATUS,
-                    existing.getId(),
-                    existing.getTable().getId()
-                );
-
-            return true;
-        });
+        return true;
     }
 }

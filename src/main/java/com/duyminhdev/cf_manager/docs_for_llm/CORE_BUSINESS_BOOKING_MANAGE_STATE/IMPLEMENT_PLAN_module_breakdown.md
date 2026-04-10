@@ -12,7 +12,8 @@ Moi module gom 3 phan: Story, Subtask ky thuat, Acceptance criteria.
 - Các câu lệnh select phức tạp (Gom nhóm từ 2 bảng trở lên, kiểm tra dữ liệu, tìm kiếm động dynamic search, ...) hãy sử dụng kĩ thuật native query: Viết câu lệnh SQL trên java , call xuống DB. Dữ liệu được fetch phải được map vào DTO riêng custom cho từng nghiệp vụ, phân bổ vào các module tương ứng trong src\main\java\com\duyminhdev\cf_manager\dto (có thể tạo folder nếu chưa có).
 - Các chuỗi string/giá trị dùng lặp lại nhiều lần trong project cần khai báo tập trung thành các CONSTANT trong src\main\java\com\duyminhdev\cf_manager\constant (có thể tạo file gom nhóm các constant theo module/business).
 - Tập trung enum vào thư mục enums
-- 
+- Tuân thủ API contract trong: src\main\java\com\duyminhdev\cf_manager\dto\base.
+
 ## Module 1 - Domain Model va Status Chuan
 
 Story:
