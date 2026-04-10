@@ -17,7 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ServiceSupport {
 
-    private static final long UPCOMING_BOOKING_WINDOW_HOURS = 2L;
+    private static final long RESERVE_WINDOW_MINUTES = 30L;
 
     private final AccountRepository accountRepository;
     private final TableRepository tableRepository;
@@ -150,12 +150,11 @@ public class ServiceSupport {
      */
     public boolean hasUpcomingActiveBooking(Integer tableId) {
         LocalDateTime fromTime = LocalDateTime.now();
-        LocalDateTime toTime = fromTime.plusHours(UPCOMING_BOOKING_WINDOW_HOURS);
+        LocalDateTime toTime = fromTime.plusMinutes(RESERVE_WINDOW_MINUTES);
 
         return tableBookingRepository.existsUpcomingActiveBookingByTableIdAndStatuses(
                 tableId,
                 List.of(
-                        BookingStatusEnum.PENDING.getCode(),
                         BookingStatusEnum.CONFIRMED.getCode()
                 ),
                 fromTime,

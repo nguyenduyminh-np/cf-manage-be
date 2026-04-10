@@ -109,4 +109,66 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             @Param("status") String status,
             @Param("excludeBookingId") Integer excludeBookingId
     );
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.active = true
+              and upper(tb.bookingStatus) = upper(:status)
+              and tb.expectedArriveTime > :startTime
+              and tb.expectedArriveTime <= :endTime
+            order by tb.expectedArriveTime asc
+            """)
+    List<TableBooking> findBookingsByStatusAndExpectedArriveWindow(
+            @Param("status") String status,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.active = true
+              and upper(tb.bookingStatus) = upper(:status)
+              and tb.checkInAt is null
+              and tb.expectedArriveTime < :cutoffTime
+            order by tb.expectedArriveTime asc
+            """)
+    List<TableBooking> findNoShowCandidates(
+            @Param("status") String status,
+            @Param("cutoffTime") LocalDateTime cutoffTime
+    );
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.active = true
+              and upper(tb.bookingStatus) = upper(:status)
+              and tb.checkInAt is not null
+              and tb.checkInAt <= :cutoffTime
+            order by tb.checkInAt asc
+            """)
+    List<TableBooking> findCheckedInByCheckInBefore(
+            @Param("status") String status,
+            @Param("cutoffTime") LocalDateTime cutoffTime
+    );
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.active = true
+              and upper(tb.bookingStatus) = upper(:status)
+              and tb.expectedCheckOut > :startTime
+              and tb.expectedCheckOut <= :endTime
+            order by tb.expectedCheckOut asc
+            """)
+    List<TableBooking> findByStatusAndExpectedCheckOutWindow(
+            @Param("status") String status,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
 }

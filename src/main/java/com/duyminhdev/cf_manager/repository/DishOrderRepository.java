@@ -55,4 +55,16 @@ public interface DishOrderRepository extends JpaRepository<DishOrder, Integer> {
             @Param("tableId") Integer tableId,
             @Param("finishedStatusCodes") Collection<String> finishedStatusCodes
     );
+
+    @Query("""
+            select case when count(do1) > 0 then true else false end
+            from DishOrder do1
+            where do1.table.id = :tableId
+              and do1.active = true
+              and do1.createdTime >= :fromTime
+            """)
+    boolean existsActiveOrderOnTableFromTime(
+            @Param("tableId") Integer tableId,
+            @Param("fromTime") java.time.LocalDateTime fromTime
+    );
 }

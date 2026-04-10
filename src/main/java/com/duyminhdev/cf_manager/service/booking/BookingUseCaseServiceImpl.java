@@ -348,7 +348,10 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
                     .allowNoopTransition(false)
                     .build());
 
-            // Deposit refund policy is handled in dedicated payment/deposit module.
+                // Rule 14: this path is refund-oriented, therefore mark as non-forfeit.
+                booking.setDepositForfeited(false);
+
+                // Actual payment/refund transaction is handled in dedicated payment/deposit module.
             TableBooking saved = tableBookingRepository.save(booking);
             serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
             bookingDomainEventPublisher.publish(
