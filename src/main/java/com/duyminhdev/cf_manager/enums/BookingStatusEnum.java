@@ -11,6 +11,7 @@ import java.util.Arrays;
 public enum BookingStatusEnum implements EnumCodeSupport {
     PENDING("PENDING_CONFIRMATION", "Chờ xác nhận"),
     CONFIRMED("CONFIRMED", "Đã xác nhận"),
+    CHECKED_IN("CHECKED_IN", "Đã nhận bàn"),
     CANCELLED("CANCELLED", "Đã huỷ"),
     COMPLETED("COMPLETED", "Hoàn thành"),
     EXPIRED("EXPIRED", "Đã hết hạn");
@@ -40,6 +41,10 @@ public enum BookingStatusEnum implements EnumCodeSupport {
 
     public boolean isCancelled() {
         return this == CANCELLED;
+    }
+
+    public boolean isCheckedIn() {
+        return this == CHECKED_IN;
     }
 
     public boolean isCompleted() {

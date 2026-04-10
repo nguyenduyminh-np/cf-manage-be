@@ -10,11 +10,16 @@ import com.duyminhdev.cf_manager.entity.Account;
 import com.duyminhdev.cf_manager.entity.TableBooking;
 import com.duyminhdev.cf_manager.entity.TableEntity;
 import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
+import com.duyminhdev.cf_manager.event.booking.BookingDomainEventPublisher;
+import com.duyminhdev.cf_manager.event.booking.BookingMutationType;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
+import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
 import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.spec.TableBookingSpec;
 import com.duyminhdev.cf_manager.service.TableBookingService;
+import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
+import com.duyminhdev.cf_manager.state_machine.booking.BookingTransitionContext;
 import com.duyminhdev.cf_manager.utils.PageUtils;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -50,6 +56,9 @@ public class TableBookingServiceImpl implements TableBookingService {
     private final TableBookingRepository tableBookingRepository;
     private final TableBookingMapper tableBookingMapper;
     private final ServiceSupport serviceSupport;
+    private final BookingStateMachine bookingStateMachine;
+    private final BookingLockService bookingLockService;
+    private final BookingDomainEventPublisher bookingDomainEventPublisher;
 
     @Override
     public PageResponse<List<TableBookingResponseDTO>> search(TableBookingSearchRequestDTO request) {
@@ -120,64 +129,99 @@ public class TableBookingServiceImpl implements TableBookingService {
     @Override
     @Transactional
     public TableBookingResponseDTO create(TableBookingCreateRequestDTO request) {
-        serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
-        serviceSupport.validateExpectedCheckoutTime(request.getExpectedArriveTime(), request.getExpectedCheckOut());
+        return bookingLockService.executeWithTableLock(request.getTableId(), () -> {
+            serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
+            serviceSupport.validateBookingTimes(
+                request.getExpectedArriveTime(),
+                request.getExpectedCheckOut(),
+                null,
+                null
+            );
 
-        String bookingStatus = request.getBookingStatus();
-        if (bookingStatus == null || bookingStatus.isBlank()) {
-            bookingStatus = BookingStatusEnum.PENDING.getCode();
-        }
-        serviceSupport.validateBookingStatusCode(bookingStatus);
+            String bookingStatus = request.getBookingStatus();
+            if (bookingStatus == null || bookingStatus.isBlank()) {
+                bookingStatus = BookingStatusEnum.PENDING.getCode();
+            }
+            BookingStatusEnum targetStatus = BookingStatusEnum.fromCode(bookingStatus);
+            serviceSupport.validateBookingStatusCode(targetStatus.getCode());
 
-        TableEntity table = serviceSupport.getActiveTable(request.getTableId());
-        Account account = serviceSupport.getCurrentAccount();
+            TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+            Account account = serviceSupport.getCurrentAccount();
 
-        TableBooking entity = tableBookingMapper.toNewEntity(request);
-        entity.setBookingStatus(BookingStatusEnum.fromCode(bookingStatus).getCode());
-        entity.setTable(table);
-        entity.setAccount(account);
-        entity.setCreatedAt(LocalDateTime.now());
-        entity.setActive(true);
+            TableBooking entity = tableBookingMapper.toNewEntity(request);
+            entity.setTable(table);
+            entity.setAccount(account);
+            entity.setCreatedAt(LocalDateTime.now());
+            entity.setActive(true);
 
-        TableBooking saved = tableBookingRepository.save(entity);
+            bookingStateMachine.initialize(entity, targetStatus);
 
-        serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
+            TableBooking saved = tableBookingRepository.save(entity);
 
-        return tableBookingMapper.toResponseDTO(saved);
+            serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
+            bookingDomainEventPublisher.publish(BookingMutationType.CREATE, saved.getId(), saved.getTable().getId());
+
+            return tableBookingMapper.toResponseDTO(saved);
+        });
     }
 
     @Override
     @Transactional
     public TableBookingResponseDTO update(TableBookingUpdateRequestDTO request) {
         serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
-        serviceSupport.validateExpectedCheckoutTime(request.getExpectedArriveTime(), request.getExpectedCheckOut());
+        serviceSupport.validateBookingTimes(
+            request.getExpectedArriveTime(),
+            request.getExpectedCheckOut(),
+            null,
+            null
+        );
 
         String bookingStatus = request.getBookingStatus();
         if (bookingStatus == null || bookingStatus.isBlank()) {
             bookingStatus = BookingStatusEnum.PENDING.getCode();
         }
-        serviceSupport.validateBookingStatusCode(bookingStatus);
+        BookingStatusEnum targetStatus = BookingStatusEnum.fromCode(bookingStatus);
+        serviceSupport.validateBookingStatusCode(targetStatus.getCode());
 
-        TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
+        TableBooking beforeLock = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
                 .orElseThrow(() -> new InvalidDataException(
                         "Booking not found with id: " + request.getBookingId()
                 ));
 
-        Integer oldTableId = existing.getTable() != null ? existing.getTable().getId() : null;
-        TableEntity newTable = serviceSupport.getActiveTable(request.getTableId());
+        Integer oldTableId = beforeLock.getTable() != null ? beforeLock.getTable().getId() : null;
+        Integer newTableId = request.getTableId();
+        List<Integer> tableIdsToLock = new ArrayList<>();
+        tableIdsToLock.add(oldTableId);
+        tableIdsToLock.add(newTableId);
 
-        tableBookingMapper.updateEntityFromRequest(request, existing);
-        existing.setTable(newTable);
-        existing.setBookingStatus(BookingStatusEnum.fromCode(bookingStatus).getCode());
+        return bookingLockService.executeWithTableLocks(tableIdsToLock, () -> {
+            TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
+                    .orElseThrow(() -> new InvalidDataException(
+                            "Booking not found with id: " + request.getBookingId()
+                    ));
 
-        TableBooking saved = tableBookingRepository.save(existing);
+            Integer currentOldTableId = existing.getTable() != null ? existing.getTable().getId() : null;
+            TableEntity newTable = serviceSupport.getActiveTable(request.getTableId());
 
-        if (oldTableId != null) {
-            serviceSupport.recomputeAndSyncTableStatus(oldTableId);
-        }
-        serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
+            tableBookingMapper.updateEntityFromRequest(request, existing);
+            existing.setTable(newTable);
 
-        return tableBookingMapper.toResponseDTO(saved);
+            bookingStateMachine.transition(BookingTransitionContext.builder()
+                .booking(existing)
+                .targetStatus(targetStatus)
+                .allowNoopTransition(true)
+                .build());
+
+            TableBooking saved = tableBookingRepository.save(existing);
+
+            if (currentOldTableId != null) {
+                serviceSupport.recomputeAndSyncTableStatus(currentOldTableId);
+            }
+            serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
+            bookingDomainEventPublisher.publish(BookingMutationType.UPDATE, saved.getId(), saved.getTable().getId());
+
+            return tableBookingMapper.toResponseDTO(saved);
+        });
     }
 
     @Override
@@ -185,54 +229,37 @@ public class TableBookingServiceImpl implements TableBookingService {
     public Boolean updateStatus(TableBookingStatusUpdateRequestDTO request) {
         serviceSupport.validateBookingStatusCode(request.getBookingStatus());
 
-        TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
+        TableBooking beforeLock = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
                 .orElseThrow(() -> new InvalidDataException(
                         "Booking not found with id: " + request.getBookingId()
                 ));
 
-        BookingStatusEnum newStatus = BookingStatusEnum.fromCode(request.getBookingStatus());
-        existing.setBookingStatus(newStatus.getCode());
-        applyCheckInCheckOutTimes(existing, newStatus, request);
+        Integer tableId = beforeLock.getTable() != null ? beforeLock.getTable().getId() : null;
+        return bookingLockService.executeWithTableLock(tableId, () -> {
+            TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
+                    .orElseThrow(() -> new InvalidDataException(
+                            "Booking not found with id: " + request.getBookingId()
+                    ));
 
-        tableBookingRepository.save(existing);
+            BookingStatusEnum targetStatus = BookingStatusEnum.fromCode(request.getBookingStatus());
+            bookingStateMachine.transition(BookingTransitionContext.builder()
+                .booking(existing)
+                .targetStatus(targetStatus)
+                .requestedCheckInAt(request.getCheckInAt())
+                .requestedCheckOutAt(request.getCheckOutAt())
+                .allowNoopTransition(true)
+                .build());
 
-        serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
+            tableBookingRepository.save(existing);
 
-        return true;
-    }
+            serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
+                bookingDomainEventPublisher.publish(
+                    BookingMutationType.UPDATE_STATUS,
+                    existing.getId(),
+                    existing.getTable().getId()
+                );
 
-    private void applyCheckInCheckOutTimes(
-            TableBooking booking,
-            BookingStatusEnum newStatus,
-            TableBookingStatusUpdateRequestDTO request
-    ) {
-        LocalDateTime resolvedCheckInAt = request.getCheckInAt() != null
-                ? request.getCheckInAt()
-                : booking.getCheckInAt();
-
-        LocalDateTime resolvedCheckOutAt = request.getCheckOutAt() != null
-                ? request.getCheckOutAt()
-                : booking.getCheckOutAt();
-
-        if (newStatus.isCompleted()) {
-            if (resolvedCheckInAt == null) {
-                resolvedCheckInAt = LocalDateTime.now();
-            }
-            if (resolvedCheckOutAt == null) {
-                resolvedCheckOutAt = LocalDateTime.now();
-            }
-        }
-
-        if (resolvedCheckOutAt != null && resolvedCheckInAt == null) {
-            throw new InvalidDataException("checkInAt is required when checkOutAt is provided");
-        }
-
-        if (resolvedCheckInAt != null && resolvedCheckOutAt != null
-                && resolvedCheckOutAt.isBefore(resolvedCheckInAt)) {
-            throw new InvalidDataException("checkOutAt must be >= checkInAt");
-        }
-
-        booking.setCheckInAt(resolvedCheckInAt);
-        booking.setCheckOutAt(resolvedCheckOutAt);
+            return true;
+        });
     }
 }

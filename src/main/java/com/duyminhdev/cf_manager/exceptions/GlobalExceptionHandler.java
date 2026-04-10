@@ -1,5 +1,7 @@
 package com.duyminhdev.cf_manager.exceptions;
 
+import com.duyminhdev.cf_manager.constant.BookingStateMachineConstant;
+import com.duyminhdev.cf_manager.constant.BookingLockConstant;
 import com.duyminhdev.cf_manager.dto.base.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,28 @@ public class GlobalExceptionHandler {
                         .path(req.getRequestURI())
                         .build());
     }
+
+        @ExceptionHandler(BookingStateTransitionException.class)
+        public ResponseEntity<ErrorResponse> bookingStateTransition(
+                        BookingStateTransitionException ex,
+                        HttpServletRequest req) {
+                return build(HttpStatus.BAD_REQUEST,
+                                BookingStateMachineConstant.ERROR_CODE_STATE_TRANSITION_INVALID,
+                                ex.getMessage(),
+                                null,
+                                req);
+        }
+
+        @ExceptionHandler(BookingLockException.class)
+        public ResponseEntity<ErrorResponse> bookingLock(
+                        BookingLockException ex,
+                        HttpServletRequest req) {
+                return build(HttpStatus.CONFLICT,
+                                BookingLockConstant.ERROR_CODE_TABLE_LOCK_BUSY,
+                                ex.getMessage(),
+                                null,
+                                req);
+        }
 
     @ExceptionHandler(InvalidDataException.class)
     public ResponseEntity<ErrorResponse> invalidData(

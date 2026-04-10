@@ -19,11 +19,11 @@ public class TableBookingSearchRequestDTO extends PageFilterRequest {
 
     private String phoneNumber;
 
-    @JsonAlias("bookingFrom")
-    private LocalDateTime expectedArriveFrom;
+    @JsonAlias("check_in_at")
+    private LocalDateTime checkInAt;
 
-    @JsonAlias("bookingTo")
-    private LocalDateTime expectedArriveTo;
+    @JsonAlias("check_out_at")
+    private LocalDateTime checkOutAt;
 
     private Boolean active;
 }

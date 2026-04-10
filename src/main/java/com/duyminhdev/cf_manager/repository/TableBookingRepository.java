@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -39,4 +40,73 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             @Param("fromTime") LocalDateTime fromTime,
             @Param("toTime") LocalDateTime toTime
             );
+
+    @Query("""
+            select case when count(tb) > 0 then true else false end
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) in :statuses
+              and tb.expectedArriveTime < :endTime
+              and tb.expectedCheckOut > :startTime
+              and (:excludeBookingId is null or tb.id <> :excludeBookingId)
+            """)
+    boolean existsConflictBookingOnTable(
+            @Param("tableId") Integer tableId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("statuses") Collection<String> statuses,
+            @Param("excludeBookingId") Integer excludeBookingId
+    );
+
+    @Query("""
+            select case when count(tb) > 0 then true else false end
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) in :statuses
+              and tb.expectedArriveTime >= :fromTime
+              and tb.expectedArriveTime <= :toTime
+              and (:excludeBookingId is null or tb.id <> :excludeBookingId)
+            """)
+    boolean existsActiveBookingOnTableInWindowAndStatuses(
+            @Param("tableId") Integer tableId,
+            @Param("fromTime") LocalDateTime fromTime,
+            @Param("toTime") LocalDateTime toTime,
+            @Param("statuses") Collection<String> statuses,
+            @Param("excludeBookingId") Integer excludeBookingId
+    );
+
+    @Query("""
+            select case when count(tb) > 0 then true else false end
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) in :statuses
+              and tb.expectedArriveTime >= :fromTime
+              and (:excludeBookingId is null or tb.id <> :excludeBookingId)
+            """)
+    boolean existsActiveBookingOnTableFromTimeAndStatuses(
+            @Param("tableId") Integer tableId,
+            @Param("fromTime") LocalDateTime fromTime,
+            @Param("statuses") Collection<String> statuses,
+            @Param("excludeBookingId") Integer excludeBookingId
+    );
+
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) = upper(:status)
+              and tb.expectedArriveTime >= :fromTime
+              and (:excludeBookingId is null or tb.id <> :excludeBookingId)
+            order by tb.expectedArriveTime asc
+            """)
+    List<TableBooking> findConfirmedBookingsFromTime(
+            @Param("tableId") Integer tableId,
+            @Param("fromTime") LocalDateTime fromTime,
+            @Param("status") String status,
+            @Param("excludeBookingId") Integer excludeBookingId
+    );
 }

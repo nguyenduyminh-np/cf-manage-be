@@ -31,6 +31,20 @@ public class TableBooking {
     @Column(name = "deposit_amount", precision = 18, scale = 0)
     private BigDecimal depositAmount;
 
+    @Builder.Default
+    @Column(name = "deposit_paid", nullable = false, columnDefinition = "tinyint(1) DEFAULT 0")
+    private Boolean depositPaid = false;
+
+    @Column(name = "deposit_paid_at")
+    private LocalDateTime depositPaidAt;
+
+    @Builder.Default
+    @Column(name = "is_deposit_forfeited", nullable = false, columnDefinition = "tinyint(1) DEFAULT 0")
+    private Boolean depositForfeited = false;
+
+    @Column(name = "deposit_txn_ref", length = 255)
+    private String depositTxnRef;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

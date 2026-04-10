@@ -87,6 +87,25 @@ public class ServiceSupport {
         }
     }
 
+    public void validateBookingTimes(
+            LocalDateTime expectedArriveTime,
+            LocalDateTime expectedCheckOut,
+            LocalDateTime checkInAt,
+            LocalDateTime checkOutAt
+    ) {
+        if (expectedArriveTime != null && expectedCheckOut != null) {
+            validateExpectedCheckoutTime(expectedArriveTime, expectedCheckOut);
+        }
+
+        if (checkOutAt != null && checkInAt == null) {
+            throw new InvalidDataException("checkInAt is required when checkOutAt is provided");
+        }
+
+        if (checkInAt != null && checkOutAt != null && checkOutAt.isBefore(checkInAt)) {
+            throw new InvalidDataException("checkOutAt must be >= checkInAt");
+        }
+    }
+
     /**
      * Check trạng thái bàn
      */

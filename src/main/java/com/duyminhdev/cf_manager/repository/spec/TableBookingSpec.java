@@ -7,6 +7,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
+import java.sql.Date;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -54,12 +55,20 @@ public final class TableBookingSpec {
                 predicates.add(cb.like(cb.lower(root.get("phoneNumber")), value, '\\'));
             }
 
-            if (request.getExpectedArriveFrom() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("expectedArriveTime"), request.getExpectedArriveFrom()));
+            if (request.getCheckInAt() != null) {
+                Date checkInDate = Date.valueOf(request.getCheckInAt().toLocalDate());
+                predicates.add(cb.equal(
+                        cb.function("DATE", Date.class, root.get("checkInAt")),
+                        checkInDate
+                ));
             }
 
-            if (request.getExpectedArriveTo() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("expectedArriveTime"), request.getExpectedArriveTo()));
+            if (request.getCheckOutAt() != null) {
+                Date checkOutDate = Date.valueOf(request.getCheckOutAt().toLocalDate());
+                predicates.add(cb.equal(
+                        cb.function("DATE", Date.class, root.get("checkOutAt")),
+                        checkOutDate
+                ));
             }
 
             if (request.getActive() != null) {

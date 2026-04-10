@@ -29,6 +29,10 @@ public class TableBookingResponseDTO {
     private String customerName;
     private String phoneNumber;
     private BigDecimal depositAmount;
+    private Boolean depositPaid;
+    private LocalDateTime depositPaidAt;
+    private Boolean depositForfeited;
+    private String depositTxnRef;
     private String note;
 
     private Integer accountId;

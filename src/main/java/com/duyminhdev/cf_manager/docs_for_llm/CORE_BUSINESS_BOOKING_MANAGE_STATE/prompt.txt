@@ -1,0 +1,571 @@
+1. đọc tài liệu sau để nắm rõ rule/convention/business flow : src\main\java\com\duyminhdev\cf_manager\docs_for_llm\CORE_BUSINESS_BOOKING_MANAGE_STATE\matrix rule and business flow.md
+2. Từ base nghiệp vụ trên, hãy đánh giá thiết kế triển khai sau của tôi ? (Tài liệu tương tự trong folder: src\main\java\com\duyminhdev\cf_manager\docs_for_llm\CORE_BUSINESS_BOOKING_MANAGE_STATE\IMPLEMENT_DESIGN_core implement design.md)
+ 
+ 
+ # core implement design
+
+# ****TECH‑STACK CHÍNH THỨC**
+
+| **Thành phần** | **Công nghệ** | **Vai trò** |
+| --- | --- | --- |
+| Core framework | Java 21 + Spring Boot 3.x | Xử lý logic, REST API, WebSocket |
+| Database | MySQL 8.0 | Lưu trữ dữ liệu quan hệ, không dùng constraint nghiệp vụ |
+| ORM | Spring Data JPA | Truy xuất dữ liệu |
+| Concurrency & lock | Redis + Redisson | Distributed lock, cache thông tin booking nhanh |
+| Background job | Spring @Scheduled + ShedLock | Quét định kỳ, đảm bảo chỉ 1 instance chạy |
+| Realtime | Spring WebSocket + STOMP | Đẩy thông báo/cảnh báo xuống POS/Client |
+
+## **1. TỔNG QUAN CÁC ENGINE CỐT LÕI**
+
+| **Engine** | **Vai trò** |
+| --- | --- |
+| **BookingStateMachine** | Quản lý vòng đời `booking_status` (PENDING_CONFIRMATION → CONFIRMED → CHECKED_IN → COMPLETED, CANCELLED, EXPIRED) |
+| **RuleValidatorChain** | Xác thực tất cả rule nghiệp vụ trước khi thay đổi trạng thái |
+| **DepositService** | Xử lý đặt cọc, hoàn cọc, mất cọc, khấu trừ vào invoice |
+| **TableLockManager** | Distributed lock (Redis) cho từng bàn, chống race condition |
+| **SchedulerTasks** | Cron job: chuyển BOOKED, no‑show, kẹt bàn, không order, cảnh báo sắp hết giờ |
+| **NotificationBroadcaster** | WebSocket push thông báo xuống client (POS, admin) |
+
+---
+
+## **2. CHI TIẾT CÁC ENGINE**
+
+### **2.1. BookingStateMachine (Enum + State transition logic)**
+
+java
+
+```
+public enum BookingStatus {
+    PENDING_CONFIRMATION, CONFIRMED, CHECKED_IN, COMPLETED, CANCELLED, EXPIRED;
+
+    public boolean canTransitionTo(BookingStatus target) {
+        return switch (this) {
+            case PENDING_CONFIRMATION -> target == CONFIRMED || target == CANCELLED;
+            case CONFIRMED -> target == CHECKED_IN || target == CANCELLED || target == EXPIRED;
+            case CHECKED_IN -> target == COMPLETED || target == CANCELLED;
+            default -> false;
+        };
+    }
+}
+```
+
+**Service sử dụng:**
+
+`booking.setState(newStatus)` kiểm tra `canTransitionTo` trước khi lưu.
+
+### **2.2. RuleValidatorChain (Chain of Responsibility)**
+
+Mỗi validator implement `BookingValidationRule`:
+
+java
+
+```
+public interface BookingValidationRule {
+    void validate(BookingContext ctx) throws BusinessRuleException;
+}
+```
+
+**Các rule cụ thể:**
+
+| **Rule** | **Lớp** | **Logic kiểm tra** |
+| --- | --- | --- |
+| AdvanceBookingRule | `AdvanceBookingValidator` | `expected_arrive_time >= now().plusHours(2)` |
+| MaxDurationRule | `MaxDurationValidator` | `expected_check_out = expected_arrive_time + max_duration` (mặc định 2h), nếu quá thì tính `extra_fee` |
+| NoConflictRule | `NoConflictValidator` | Trên cùng bàn, không có booking `CONFIRMED` hoặc `CHECKED_IN` nào mà `expected_arrive_time` nằm trong khoảng `[expected_arrive_time, expected_check_out]` |
+| DepositRule | `DepositValidator` | Nếu `deposit_amount > 0` thì bắt buộc `deposit_paid == true` trước khi chuyển sang `CONFIRMED` |
+| EarlyArrivalRule | `EarlyArrivalValidator` | Khi check‑in sớm >30p: tính lại `expected_check_out = now + max_duration`, kiểm tra conflict với booking kế tiếp. Nếu conflict → yêu cầu `force=true` |
+| ExtensionRule | `ExtensionValidator` | Khi gia hạn: kiểm tra booking kế tiếp có `expected_arrive_time <= new_check_out + 30p` → từ chối |
+| WalkInPendingRule | `WalkInPendingValidator` | Khi xếp walk‑in vào bàn có booking `PENDING_CONFIRMATION` → trả cảnh báo (không chặn, chỉ warning) |
+
+**Context class:**
+
+java
+
+```
+public class BookingContext {
+    private TableBooking booking;
+    private DiningTable table;
+    private boolean force;       // để bypass conflict cảnh báo (Rule 10)
+    private List<String> warnings;
+    // getter/setter
+}
+```
+
+### **2.3. DepositService**
+
+java
+
+```
+@Service
+public class DepositService {
+    public void processDeposit(Long bookingId, BigDecimal amount, PaymentMethod method) {
+        // Tạo payment transaction, nếu thành công:
+        booking.setDepositAmount(amount);
+        booking.setDepositPaid(true);
+        bookingRepository.save(booking);
+        // Nếu booking đang PENDING_CONFIRMATION thì chuyển sang CONFIRMED
+        if (booking.getStatus() == PENDING_CONFIRMATION) {
+            booking.setState(CONFIRMED);
+        }
+    }
+
+    public void forfeitDeposit(Long bookingId) {
+        TableBooking booking = bookingRepository.findById(bookingId).orElseThrow();
+        if (booking.getDepositPaid() && !booking.getIsDepositForfeited()) {
+            booking.setIsDepositForfeited(true);
+            // Ghi nhận mất cọc (có thể tạo record vào bảng deposit_log)
+            bookingRepository.save(booking);
+            notificationBroadcaster.send("/topic/deposit-events",
+                "Mất cọc " + booking.getDepositAmount() + " cho booking " + bookingId);
+        }
+    }
+
+    public void refundDeposit(Long bookingId) {
+        // Hoàn cọc khi hủy trước giờ hợp lệ
+        // (tuỳ chính sách)
+    }
+}
+```
+
+### **2.4. TableLockManager (Redis)**
+
+java
+
+```
+@Component
+public class TableLockManager {
+    private final RedissonClient redisson;
+
+    public <T> T executeWithLock(Long tableId, Supplier<T> action) {
+        RLock lock = redisson.getLock("table:lock:" + tableId);
+        try {
+            if (lock.tryLock(0, 5, TimeUnit.SECONDS)) {
+                return action.get();
+            } else {
+                throw new TableBusyException("Bàn đang được xử lý, thử lại sau");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) lock.unlock();
+        }
+    }
+}
+```
+
+### **2.5. SchedulerTasks (cron job mỗi phút)**
+
+Dùng `@Scheduled` + `ShedLock` để đảm bảo chỉ một instance chạy.
+
+java
+
+```
+@Component
+public class SchedulerTasks {
+    @Autowired private BookingRepository bookingRepo;
+    @Autowired private DiningTableRepository tableRepo;
+    @Autowired private BookingStateMachine stateMachine;
+    @Autowired private DepositService depositService;
+    @Autowired private NotificationBroadcaster notifier;
+
+    // Job 1: Chuyển CONFIRMED → BOOKED (bàn) khi còn 30p
+    @Scheduled(cron = "0 * * * * *")
+    @SchedulerLock(name = "updateBookedTableStatus")
+    public void updateBookedTableStatus() {
+        List<TableBooking> soonBookings = bookingRepo.findConfirmedBookingsComingIn30Minutes();
+        for (TableBooking booking : soonBookings) {
+            DiningTable table = booking.getDiningTable();
+            if (table.getTableStatus() == AVAILABLE) {
+                table.setTableStatus(BOOKED);
+                tableRepo.save(table);
+                notifier.send("/topic/table-status", "Bàn " + table.getTableCode() + " đã được đặt trước (Reserved)");
+            }
+        }
+    }
+
+    // Job 2: No-show (EXPIRED)
+    @Scheduled(cron = "0 * * * * *")
+    @SchedulerLock(name = "checkNoShow")
+    public void checkNoShow() {
+        List<TableBooking> noShowCandidates = bookingRepo.findConfirmedNotCheckedInPastArriveTimePlus30();
+        for (TableBooking booking : noShowCandidates) {
+            booking.setStatus(EXPIRED);
+            bookingRepo.save(booking);
+            depositService.forfeitDeposit(booking.getId());
+            // Giải phóng bàn nếu đang BOOKED
+            DiningTable table = booking.getDiningTable();
+            if (table.getTableStatus() == BOOKED) {
+                table.setTableStatus(AVAILABLE);
+                tableRepo.save(table);
+            }
+            notifier.send("/topic/booking-updates", "Booking " + booking.getId() + " đã EXPIRED do no-show");
+        }
+    }
+
+    // Job 3: Cảnh báo kẹt bàn (bàn OCCUPIED sắp có booking CONFIRMED trong 30p)
+    @Scheduled(cron = "0 * * * * *")
+    @SchedulerLock(name = "checkOccupiedConflict")
+    public void checkOccupiedConflict() {
+        List<TableBooking> upcoming = bookingRepo.findConfirmedBookingsComingIn30Minutes();
+        for (TableBooking booking : upcoming) {
+            DiningTable table = booking.getDiningTable();
+            if (table.getTableStatus() == OCCUPIED) {
+                notifier.send("/topic/table-alerts",
+                    "CẢNH BÁO ĐỎ: Bàn " + table.getTableCode() + " đang có khách ngồi nhưng sau " +
+                    (booking.getExpectedArriveTime().getTime() - System.currentTimeMillis())/60000 +
+                    " phút nữa có booking mới. Hãy xử lý!");
+            }
+        }
+    }
+
+    // Job 4: Hủy booking CHECKED_IN nếu không order sau 20p
+    @Scheduled(cron = "0 * * * * *")
+    @SchedulerLock(name = "checkPendingOrderTimeout")
+    public void checkPendingOrderTimeout() {
+        List<TableBooking> checkedInNoOrder = bookingRepo.findCheckedInWithoutOrderOlderThan(20);
+        for (TableBooking booking : checkedInNoOrder) {
+            // Kiểm tra xem đã có dish_order chưa (giả sử có bảng order_item)
+            if (!orderService.hasAnyOrder(booking.getId())) {
+                // Cảnh báo lần 1 sau 10p
+                if (Duration.between(booking.getCheckInAt(), LocalDateTime.now()).toMinutes() == 10) {
+                    notifier.send("/topic/table-alerts", "Bàn " + booking.getDiningTable().getTableCode() +
+                        " đã check-in 10p nhưng chưa gọi món");
+                }
+                // Sau 20p -> tự động huỷ
+                if (Duration.between(booking.getCheckInAt(), LocalDateTime.now()).toMinutes() >= 20) {
+                    booking.setStatus(CANCELLED);
+                    bookingRepo.save(booking);
+                    DiningTable table = booking.getDiningTable();
+                    table.setTableStatus(AVAILABLE);
+                    tableRepo.save(table);
+                    notifier.send("/topic/table-status", "Bàn " + table.getTableCode() + " đã giải phóng (khách không order)");
+                }
+            }
+        }
+    }
+
+    // Job 5: Cảnh báo sắp hết giờ (15p trước expected_check_out)
+    @Scheduled(cron = "0 * * * * *")
+    @SchedulerLock(name = "notifyBeforeCheckout")
+    public void notifyBeforeCheckout() {
+        List<TableBooking> aboutToEnd = bookingRepo.findCheckedInWithCheckoutIn15Minutes();
+        for (TableBooking booking : aboutToEnd) {
+            notifier.send("/topic/table-alerts", "Bàn " + booking.getDiningTable().getTableCode() +
+                " sắp hết giờ sau 15 phút. Chuẩn bị thanh toán.");
+        }
+    }
+}
+```
+
+### **2.6. NotificationBroadcaster (WebSocket)**
+
+java
+
+```
+@Component
+public class NotificationBroadcaster {
+    private final SimpMessagingTemplate messagingTemplate;
+
+    public void send(String destination, String message) {
+        messagingTemplate.convertAndSend(destination, message);
+    }
+
+    public void sendBookingUpdate(Long bookingId, String event) {
+        send("/topic/booking-updates", Map.of("bookingId", bookingId, "event", event));
+    }
+}
+```
+
+---
+
+## **3. CÁC SERVICE CHÍNH**
+
+### **3.1. BookingService**
+
+java
+
+```
+@Service
+public class BookingService {
+    @Autowired private TableLockManager lockManager;
+    @Autowired private RuleValidatorChain validatorChain;
+    @Autowired private BookingRepository bookingRepo;
+    @Autowired private DiningTableRepository tableRepo;
+    @Autowired private DepositService depositService;
+    @Autowired private NotificationBroadcaster notifier;
+
+    @Transactional
+    public TableBooking createBooking(BookingRequest request) {
+        return lockManager.executeWithLock(request.getDiningTableId(), () -> {
+            DiningTable table = tableRepo.findById(request.getDiningTableId()).orElseThrow();
+            if (table.getTableStatus() != AVAILABLE && table.getTableStatus() != BOOKED) {
+                throw new BusinessRuleException("Bàn không khả dụng");
+            }
+            TableBooking booking = new TableBooking();
+            booking.setDiningTable(table);
+            booking.setExpectedArriveTime(request.getExpectedArriveTime());
+            booking.setExpectedCheckOut(request.getExpectedArriveTime().plusHours(2)); // mặc định 2h
+            booking.setMaxDurationMinutes(120);
+            booking.setBookingStatus(PENDING_CONFIRMATION);
+            booking.setDepositAmount(request.getDepositAmount() != null ? request.getDepositAmount() : BigDecimal.ZERO);
+            booking.setDepositPaid(false);
+            // Validate all rules
+            BookingContext ctx = new BookingContext(booking, table, false);
+            validatorChain.validate(ctx);
+            booking = bookingRepo.save(booking);
+            // Nếu có deposit ngay lập tức (online) thì gọi depositService
+            if (request.isPayDepositNow() && booking.getDepositAmount().compareTo(BigDecimal.ZERO) > 0) {
+                depositService.processDeposit(booking.getId(), booking.getDepositAmount(), PaymentMethod.ONLINE);
+            }
+            notifier.sendBookingUpdate(booking.getId(), "CREATED");
+            return booking;
+        });
+    }
+
+    @Transactional
+    public TableBooking confirmBooking(Long bookingId) {
+        TableBooking booking = bookingRepo.findById(bookingId).orElseThrow();
+        if (booking.getBookingStatus() != PENDING_CONFIRMATION) {
+            throw new BusinessRuleException("Chỉ có thể xác nhận booking ở trạng thái PENDING_CONFIRMATION");
+        }
+        if (booking.getDepositAmount().compareTo(BigDecimal.ZERO) > 0 && !booking.getDepositPaid()) {
+            throw new BusinessRuleException("Cần thanh toán tiền cọc trước khi xác nhận");
+        }
+        booking.setBookingStatus(CONFIRMED);
+        booking = bookingRepo.save(booking);
+        notifier.sendBookingUpdate(bookingId, "CONFIRMED");
+        return booking;
+    }
+
+    @Transactional
+    public TableBooking checkIn(Long bookingId, boolean force) {
+        return lockManager.executeWithLock(bookingId, () -> {
+            TableBooking booking = bookingRepo.findById(bookingId).orElseThrow();
+            DiningTable table = booking.getDiningTable();
+            if (booking.getBookingStatus() != CONFIRMED) {
+                throw new BusinessRuleException("Chỉ check-in booking đã CONFIRMED");
+            }
+            LocalDateTime now = LocalDateTime.now();
+            boolean isEarly = now.isBefore(booking.getExpectedArriveTime().minusMinutes(30));
+            BookingContext ctx = new BookingContext(booking, table, force);
+            if (isEarly) {
+                // Rule 10 & 11
+                new EarlyArrivalValidator().validate(ctx);
+                // Nếu force = true, vẫn cho phép nhưng phải đảm bảo không đè booking kế tiếp?
+                // Ở đây EarlyArrivalValidator đã kiểm tra và ném exception nếu conflict và force=false.
+            }
+            // Check muộn <=30p: vẫn cho check-in, giữ nguyên expected_check_out
+            booking.setCheckInAt(now);
+            booking.setBookingStatus(CHECKED_IN);
+            table.setTableStatus(OCCUPIED);
+            tableRepo.save(table);
+            booking = bookingRepo.save(booking);
+            notifier.sendBookingUpdate(bookingId, "CHECKED_IN");
+            return booking;
+        });
+    }
+
+    @Transactional
+    public TableBooking checkOut(Long bookingId) {
+        TableBooking booking = bookingRepo.findById(bookingId).orElseThrow();
+        if (booking.getBookingStatus() != CHECKED_IN) {
+            throw new BusinessRuleException("Chỉ check-out booking đang CHECKED_IN");
+        }
+        booking.setCheckOutAt(LocalDateTime.now());
+        booking.setBookingStatus(COMPLETED);
+        // Giải phóng bàn
+        DiningTable table = booking.getDiningTable();
+        table.setTableStatus(AVAILABLE);
+        tableRepo.save(table);
+        booking = bookingRepo.save(booking);
+        // Nếu có extra_fee thì gửi thông báo cho POS để tính vào hóa đơn
+        if (booking.getExtraFeeAmount().compareTo(BigDecimal.ZERO) > 0) {
+            notifier.send("/topic/payment", "Booking " + bookingId + " có phụ thu quá giờ: " + booking.getExtraFeeAmount());
+        }
+        notifier.sendBookingUpdate(bookingId, "COMPLETED");
+        return booking;
+    }
+
+    @Transactional
+    public void cancelBooking(Long bookingId) {
+        TableBooking booking = bookingRepo.findById(bookingId).orElseThrow();
+        if (booking.getBookingStatus() == CONFIRMED || booking.getBookingStatus() == PENDING_CONFIRMATION) {
+            if (LocalDateTime.now().isAfter(booking.getExpectedArriveTime())) {
+                throw new BusinessRuleException("Không thể hủy sau giờ đến dự kiến");
+            }
+            booking.setBookingStatus(CANCELLED);
+            // Hoàn cọc nếu chính sách cho phép
+            if (booking.getDepositPaid() && !booking.getIsDepositForfeited()) {
+                depositService.refundDeposit(bookingId);
+            }
+            // Giải phóng bàn nếu đang BOOKED
+            DiningTable table = booking.getDiningTable();
+            if (table.getTableStatus() == BOOKED) {
+                table.setTableStatus(AVAILABLE);
+                tableRepo.save(table);
+            }
+            bookingRepo.save(booking);
+            notifier.sendBookingUpdate(bookingId, "CANCELLED");
+        } else {
+            throw new BusinessRuleException("Không thể hủu booking ở trạng thái hiện tại");
+        }
+    }
+
+    // Tạo walk-in (check-in ngay lập tức)
+    @Transactional
+    public TableBooking createWalkIn(WalkInRequest request) {
+        return lockManager.executeWithLock(request.getDiningTableId(), () -> {
+            DiningTable table = tableRepo.findById(request.getDiningTableId()).orElseThrow();
+            if (table.getTableStatus() != AVAILABLE) {
+                throw new BusinessRuleException("Bàn không trống");
+            }
+            // Kiểm tra nếu có booking PENDING_CONFIRMATION trên bàn này trong tương lai gần
+            List<TableBooking> pending = bookingRepo.findPendingConfirmationsOnTableAfter(table.getId(), LocalDateTime.now());
+            if (!pending.isEmpty()) {
+                // Rule 18: cảnh báo nhưng vẫn cho phép? Tuỳ nghiệp vụ: Ở đây tôi cho phép nhưng trả warning
+                notifier.send("/topic/table-alerts", "Cảnh báo: Bàn " + table.getTableCode() +
+                    " có booking chưa xác nhận, hãy liên hệ khách trước khi xếp walk-in");
+            }
+            TableBooking booking = new TableBooking();
+            booking.setDiningTable(table);
+            booking.setExpectedArriveTime(LocalDateTime.now());
+            booking.setExpectedCheckOut(LocalDateTime.now().plusHours(2));
+            booking.setMaxDurationMinutes(120);
+            booking.setBookingStatus(CHECKED_IN); // walk-in vào luôn
+            booking.setCheckInAt(LocalDateTime.now());
+            booking.setDepositAmount(BigDecimal.ZERO);
+            booking.setDepositPaid(false);
+            booking = bookingRepo.save(booking);
+            table.setTableStatus(OCCUPIED);
+            tableRepo.save(table);
+            notifier.sendBookingUpdate(booking.getId(), "WALK_IN_CREATED");
+            return booking;
+        });
+    }
+}
+```
+
+### **3.2. TableService (gia hạn, chuyển bàn, xem khung giờ trống)**
+
+java
+
+```
+@Service
+public class TableService {
+    @Autowired private TableLockManager lockManager;
+    @Autowired private BookingRepository bookingRepo;
+    @Autowired private DiningTableRepository tableRepo;
+    @Autowired private NotificationBroadcaster notifier;
+
+    @Transactional
+    public void extendBooking(Long bookingId, int extraMinutes) {
+        lockManager.executeWithLock(bookingId, () -> {
+            TableBooking booking = bookingRepo.findById(bookingId).orElseThrow();
+            if (booking.getBookingStatus() != CHECKED_IN) {
+                throw new BusinessRuleException("Chỉ gia hạn cho booking đang CHECKED_IN");
+            }
+            LocalDateTime newCheckOut = booking.getExpectedCheckOut().plusMinutes(extraMinutes);
+            // Kiểm tra xung đột với booking kế tiếp (Rule 13)
+            List<TableBooking> nextBookings = bookingRepo.findConfirmedBookingsOnTableAfter(
+                booking.getDiningTable().getId(), booking.getExpectedCheckOut());
+            if (!nextBookings.isEmpty()) {
+                TableBooking next = nextBookings.get(0);
+                if (next.getExpectedArriveTime().isBefore(newCheckOut.plusMinutes(30))) {
+                    throw new BusinessRuleException("Không thể gia hạn vì có booking sau đó chỉ sau " +
+                        Duration.between(booking.getExpectedCheckOut(), next.getExpectedArriveTime()).toMinutes() + " phút");
+                }
+            }
+            booking.setExpectedCheckOut(newCheckOut);
+            // Tính phụ thu nếu tổng thời gian > max_duration
+            long totalMinutes = Duration.between(booking.getCheckInAt(), newCheckOut).toMinutes();
+            if (totalMinutes > booking.getMaxDurationMinutes()) {
+                long extra = totalMinutes - booking.getMaxDurationMinutes();
+                BigDecimal fee = BigDecimal.valueOf(extra / 30.0 * 50000); // 50k/30p
+                booking.setExtraFeeAmount(fee);
+            }
+            bookingRepo.save(booking);
+            notifier.send("/topic/table-alerts", "Bàn " + booking.getDiningTable().getTableCode() + " đã được gia hạn đến " + newCheckOut);
+            return null;
+        });
+    }
+}
+```
+
+---
+
+## **4. API ENDPOINTS (REST)**
+
+| **Method** | **Endpoint** | **Mô tả** | **Xử lý lock** |
+| --- | --- | --- | --- |
+| POST | `/api/bookings` | Tạo booking mới (PENDING_CONFIRMATION) | Lock bàn |
+| PUT | `/api/bookings/{id}/confirm` | Xác nhận booking (có thể yêu cầu cọc) | Lock bàn |
+| PUT | `/api/bookings/{id}/check-in?force={boolean}` | Check‑in, force=true cho phép check‑in sớm vượt conflict | Lock bàn |
+| PUT | `/api/bookings/{id}/check-out` | Check‑out, giải phóng bàn | Lock bàn |
+| DELETE | `/api/bookings/{id}` | Hủy booking (chỉ trước giờ) | Lock bàn |
+| POST | `/api/walkin` | Tạo walk‑in (CHECKED_IN ngay) | Lock bàn |
+| PUT | `/api/tables/{id}/extend?minutes={extra}` | Gia hạn giờ cho bàn đang OCCUPIED | Lock bàn |
+| GET | `/api/tables/{id}/available-slots?date={date}` | Xem các khung giờ trống trong ngày (cache Redis) | Không lock |
+| POST | `/api/bookings/{id}/deposit` | Đặt cọc cho booking | Lock bàn (tuỳ) |
+
+**Request/Response example:**
+
+json
+
+```
+// POST /api/bookings
+{
+    "diningTableId": 1,
+    "expectedArriveTime": "2026-04-10T19:00:00",
+    "customerName": "Nguyen Van A",
+    "phoneNumber": "0987654321",
+    "depositAmount": 150000,
+    "payDepositNow": true
+}
+```
+
+---
+
+## **5. TÍCH HỢP REALTIME NOTIFICATION**
+
+Spring WebSocket config:
+
+java
+
+```
+@Configuration
+@EnableWebSocketMessageBroker
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry config) {
+        config.enableSimpleBroker("/topic");
+        config.setApplicationDestinationPrefixes("/app");
+    }
+
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/ws").setAllowedOrigins("*").withSockJS();
+    }
+}
+```
+
+Client subscribe:
+
+- `/topic/table-alerts` – nhận cảnh báo đỏ
+- `/topic/booking-updates` – cập nhật trạng thái booking
+- `/topic/table-status` – thay đổi trạng thái bàn
+
+---
+
+## **6. TỔNG KẾT**
+
+Bản thiết kế này **tập trung vào core engine** và **hoàn toàn phù hợp** với cấu trúc database hiện có (2 bảng `table_booking` và `dining_table`). Các điểm chính:
+
+- **BookingStateMachine** đảm bảo trạng thái đúng luồng.
+- **RuleValidatorChain** thực thi tất cả rule nghiệp vụ (đặt trước 2h, xung đột thời gian, cọc, check‑in sớm, gia hạn…).
+- **DepositService** xử lý cọc, mất cọc, hoàn cọc.
+- **TableLockManager** dùng Redis lock chống race condition.
+- **SchedulerTasks** tự động quét no‑show, kẹt bàn, không order, cảnh báo sắp hết giờ.
+- **NotificationBroadcaster** push realtime qua WebSocket.
+
+Có thể triển khai ngay với Spring Boot + MySQL + Redis.

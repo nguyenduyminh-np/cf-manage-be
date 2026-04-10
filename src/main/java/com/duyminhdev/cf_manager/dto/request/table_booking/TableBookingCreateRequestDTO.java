@@ -34,6 +34,15 @@ public class TableBookingCreateRequestDTO {
     @DecimalMin(value = "0", inclusive = true, message = "depositAmount must be >= 0")
     private BigDecimal depositAmount;
 
+    private Boolean depositPaid;
+
+    private LocalDateTime depositPaidAt;
+
+    private Boolean depositForfeited;
+
+    @Size(max = 255, message = "depositTxnRef must be <= 255 characters")
+    private String depositTxnRef;
+
     @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
     private String bookingStatus;
 
