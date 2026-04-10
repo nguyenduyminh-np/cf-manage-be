@@ -12,5 +12,6 @@ public enum BookingMutationType {
     EXTEND,
     WALK_IN,
     LATE_ARRIVAL_WALK_IN,
-    CANCEL_NO_ORDER_TIMEOUT
+    CANCEL_NO_ORDER_TIMEOUT,
+    DEPOSIT
 }

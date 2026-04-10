@@ -1,7 +1,11 @@
 package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckInRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckOutRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingDepositRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingExtendRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingStatusUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
@@ -211,5 +215,71 @@ public class TableBookingServiceImpl implements TableBookingService {
         }
 
         return true;
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO confirm(Integer bookingId) {
+        TableBooking saved = bookingUseCaseService.confirmBooking(bookingId);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO checkIn(Integer bookingId, TableBookingCheckInRequestDTO request) {
+        TableBookingCheckInRequestDTO safeRequest = request != null ? request : new TableBookingCheckInRequestDTO();
+        boolean force = Boolean.TRUE.equals(safeRequest.getForce());
+        TableBooking saved = bookingUseCaseService.checkIn(bookingId, safeRequest.getCheckInAt(), force);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO checkOut(Integer bookingId, TableBookingCheckOutRequestDTO request) {
+        TableBookingCheckOutRequestDTO safeRequest = request != null ? request : new TableBookingCheckOutRequestDTO();
+        TableBooking saved = bookingUseCaseService.checkOut(bookingId, safeRequest.getCheckOutAt());
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO cancel(Integer bookingId) {
+        TableBooking saved = bookingUseCaseService.cancelBooking(bookingId);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO extend(Integer bookingId, TableBookingExtendRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("extend request is required");
+        }
+
+        boolean force = Boolean.TRUE.equals(request.getForce());
+        TableBooking saved = bookingUseCaseService.extendBooking(bookingId, request.getExpectedCheckOut(), force);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO createWalkIn(TableBookingCreateRequestDTO request, boolean force) {
+        TableBooking saved = bookingUseCaseService.createWalkIn(request, force);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO deposit(Integer bookingId, TableBookingDepositRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("deposit request is required");
+        }
+
+        TableBooking saved = bookingUseCaseService.markDepositPaid(
+                bookingId,
+                request.getDepositAmount(),
+                request.getDepositTxnRef(),
+                request.getDepositPaidAt()
+        );
+        return tableBookingMapper.toResponseDTO(saved);
     }
 }

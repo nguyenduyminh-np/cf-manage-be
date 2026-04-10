@@ -6,7 +6,6 @@ import com.duyminhdev.cf_manager.entity.TableEntity;
 import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
 import com.duyminhdev.cf_manager.enums.TableStatusEnum;
 import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
-import com.duyminhdev.cf_manager.repository.DishOrderRepository;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.TableRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,6 @@ public class BookingSchedulerService {
 
     private final TableBookingRepository tableBookingRepository;
     private final TableRepository tableRepository;
-    private final DishOrderRepository dishOrderRepository;
     private final BookingUseCaseService bookingUseCaseService;
     private final BookingLockService bookingLockService;
     private final BookingNotificationService bookingNotificationService;
@@ -38,8 +36,7 @@ public class BookingSchedulerService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime reserveWindowEnd = now.plusMinutes(BookingSchedulerConstant.RESERVE_WINDOW_MINUTES);
 
-        List<TableBooking> upcoming = tableBookingRepository.findBookingsByStatusAndExpectedArriveWindow(
-                BookingStatusEnum.CONFIRMED.getCode(),
+        List<TableBooking> upcoming = tableBookingRepository.findConfirmedBookingsComingInWindow(
                 now,
                 reserveWindowEnd
         );
@@ -95,12 +92,8 @@ public class BookingSchedulerService {
 
     @Transactional
     public void expireNoShowBookings() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(BookingSchedulerConstant.NO_SHOW_GRACE_MINUTES);
-
-        List<TableBooking> noShowCandidates = tableBookingRepository.findNoShowCandidates(
-                BookingStatusEnum.CONFIRMED.getCode(),
-                cutoff
-        );
+        LocalDateTime now = LocalDateTime.now();
+        List<TableBooking> noShowCandidates = tableBookingRepository.findConfirmedNoShowCandidates(now);
 
         for (TableBooking candidate : noShowCandidates) {
             Integer bookingId = candidate.getId();
@@ -132,8 +125,7 @@ public class BookingSchedulerService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime reserveWindowEnd = now.plusMinutes(BookingSchedulerConstant.RESERVE_WINDOW_MINUTES);
 
-        List<TableBooking> upcoming = tableBookingRepository.findBookingsByStatusAndExpectedArriveWindow(
-                BookingStatusEnum.CONFIRMED.getCode(),
+        List<TableBooking> upcoming = tableBookingRepository.findConfirmedBookingsComingInWindow(
                 now,
                 reserveWindowEnd
         );
@@ -166,11 +158,9 @@ public class BookingSchedulerService {
     @Transactional
     public void processNoOrderTimeoutFlow() {
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime warningCutoff = now.minusMinutes(BookingSchedulerConstant.NO_ORDER_WARNING_MINUTES);
-
-        List<TableBooking> checkedInCandidates = tableBookingRepository.findCheckedInByCheckInBefore(
-                BookingStatusEnum.CHECKED_IN.getCode(),
-                warningCutoff
+        List<TableBooking> checkedInCandidates = tableBookingRepository.findCheckedInWithoutOrderOlderThan(
+            now,
+            (int) BookingSchedulerConstant.NO_ORDER_WARNING_MINUTES
         );
 
         for (TableBooking booking : checkedInCandidates) {
@@ -178,10 +168,6 @@ public class BookingSchedulerService {
             Integer tableId = resolveTableId(booking);
             LocalDateTime checkInAt = booking.getCheckInAt();
             if (bookingId == null || tableId == null || checkInAt == null) {
-                continue;
-            }
-
-            if (dishOrderRepository.existsActiveOrderOnTableFromTime(tableId, checkInAt)) {
                 continue;
             }
 
@@ -257,19 +243,20 @@ public class BookingSchedulerService {
 
     private Map<String, Object> buildPayload(String eventType, TableBooking booking, String message) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("eventType", eventType);
+        payload.put("event", eventType);
         payload.put("message", message);
+        payload.put("source", "SCHEDULER");
 
         if (booking != null) {
             payload.put("bookingId", booking.getId());
-            payload.put("status", booking.getBookingStatus());
+            payload.put("bookingStatus", booking.getBookingStatus());
             payload.put("expectedArriveTime", booking.getExpectedArriveTime());
             payload.put("expectedCheckOut", booking.getExpectedCheckOut());
             payload.put("tableId", resolveTableId(booking));
             payload.put("tableCode", booking.getTable() != null ? booking.getTable().getTableCode() : null);
         }
 
-        payload.put("occurredAt", LocalDateTime.now());
+        payload.put("at", LocalDateTime.now());
         return payload;
     }
 }

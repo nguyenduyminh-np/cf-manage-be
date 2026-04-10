@@ -3,6 +3,7 @@ package com.duyminhdev.cf_manager.service.booking;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCreateRequestDTO;
 import com.duyminhdev.cf_manager.entity.TableBooking;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public interface BookingUseCaseService {
@@ -26,4 +27,6 @@ public interface BookingUseCaseService {
     TableBooking createWalkInFromLateArrival(Integer lateBookingId, TableBookingCreateRequestDTO walkInRequest, boolean force);
 
     TableBooking cancelBookingNoOrderTimeout(Integer bookingId, LocalDateTime now);
+
+    TableBooking markDepositPaid(Integer bookingId, BigDecimal depositAmount, String depositTxnRef, LocalDateTime paidAt);
 }

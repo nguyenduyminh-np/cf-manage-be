@@ -7,7 +7,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,12 +26,40 @@ public class BookingNotificationServiceImpl implements BookingNotificationServic
             return;
         }
 
+        Map<String, Object> envelope = normalizePayload(topic, dedupKey, payload);
+
         SimpMessagingTemplate messagingTemplate = messagingTemplateProvider.getIfAvailable();
         if (messagingTemplate == null) {
-            log.debug("SimpMessagingTemplate is not configured, skipping notification. topic={}, payload={}", topic, payload);
+            log.debug("SimpMessagingTemplate is not configured, skipping notification. topic={}, payload={}", topic, envelope);
             return;
         }
 
-        messagingTemplate.convertAndSend(topic, payload);
+        messagingTemplate.convertAndSend(topic, envelope);
+    }
+
+    private Map<String, Object> normalizePayload(String topic, String dedupKey, Map<String, Object> payload) {
+        Map<String, Object> safePayload = payload != null ? payload : Map.of();
+        Map<String, Object> envelope = new LinkedHashMap<>(safePayload);
+
+        Object canonicalEvent = envelope.get("event");
+        if (canonicalEvent == null && envelope.containsKey("eventType")) {
+            canonicalEvent = envelope.get("eventType");
+        }
+        envelope.put("event", canonicalEvent);
+
+        Object at = envelope.get("at");
+        if (at == null && envelope.containsKey("occurredAt")) {
+            at = envelope.get("occurredAt");
+        }
+        if (at == null) {
+            at = LocalDateTime.now();
+        }
+        envelope.put("at", at);
+
+        envelope.put("topic", topic);
+        envelope.put("dedupKey", dedupKey);
+        envelope.put("eventId", UUID.randomUUID().toString());
+
+        return envelope;
     }
 }

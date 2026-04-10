@@ -5,7 +5,6 @@ import com.duyminhdev.cf_manager.entity.TableEntity;
 import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
 import com.duyminhdev.cf_manager.enums.TableStatusEnum;
 import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
-import com.duyminhdev.cf_manager.repository.DishOrderRepository;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.TableRepository;
 import org.junit.jupiter.api.Test;
@@ -38,9 +37,6 @@ class BookingSchedulerServiceTest {
     private TableRepository tableRepository;
 
     @Mock
-    private DishOrderRepository dishOrderRepository;
-
-    @Mock
     private BookingUseCaseService bookingUseCaseService;
 
     @Mock
@@ -63,7 +59,7 @@ class BookingSchedulerServiceTest {
         TableBooking booking = booking(10, 3, BookingStatusEnum.CONFIRMED, TableStatusEnum.AVAILABLE,
                 LocalDateTime.now().plusMinutes(20), LocalDateTime.now().plusHours(2), LocalDateTime.now().minusMinutes(1));
 
-        when(tableBookingRepository.findBookingsByStatusAndExpectedArriveWindow(anyString(), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(tableBookingRepository.findConfirmedBookingsComingInWindow(any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(List.of(booking));
         when(tableBookingRepository.findByIdAndActiveTrue(10)).thenReturn(Optional.of(booking));
         when(tableRepository.findByIdAndActiveTrue(3)).thenReturn(Optional.of(booking.getTable()));
@@ -88,7 +84,7 @@ class BookingSchedulerServiceTest {
         TableBooking expired = booking(19, 5, BookingStatusEnum.EXPIRED, TableStatusEnum.AVAILABLE,
                 candidate.getExpectedArriveTime(), candidate.getExpectedCheckOut(), null);
 
-        when(tableBookingRepository.findNoShowCandidates(anyString(), any(LocalDateTime.class)))
+        when(tableBookingRepository.findConfirmedNoShowCandidates(any(LocalDateTime.class)))
                 .thenReturn(List.of(candidate));
         when(bookingUseCaseService.expireBooking(19)).thenReturn(expired);
 
@@ -107,9 +103,8 @@ class BookingSchedulerServiceTest {
         TableBooking checkedIn = booking(41, 7, BookingStatusEnum.CHECKED_IN, TableStatusEnum.OCCUPIED,
                 LocalDateTime.now().minusMinutes(40), LocalDateTime.now().plusMinutes(30), LocalDateTime.now().minusMinutes(11));
 
-        when(tableBookingRepository.findCheckedInByCheckInBefore(anyString(), any(LocalDateTime.class)))
+        when(tableBookingRepository.findCheckedInWithoutOrderOlderThan(any(LocalDateTime.class), anyInt()))
                 .thenReturn(List.of(checkedIn));
-        when(dishOrderRepository.existsActiveOrderOnTableFromTime(7, checkedIn.getCheckInAt())).thenReturn(false);
 
         bookingSchedulerService.processNoOrderTimeoutFlow();
 
@@ -128,9 +123,8 @@ class BookingSchedulerServiceTest {
         TableBooking cancelled = booking(42, 8, BookingStatusEnum.CANCELLED, TableStatusEnum.AVAILABLE,
                 checkedIn.getExpectedArriveTime(), checkedIn.getExpectedCheckOut(), checkedIn.getCheckInAt());
 
-        when(tableBookingRepository.findCheckedInByCheckInBefore(anyString(), any(LocalDateTime.class)))
+        when(tableBookingRepository.findCheckedInWithoutOrderOlderThan(any(LocalDateTime.class), anyInt()))
                 .thenReturn(List.of(checkedIn));
-        when(dishOrderRepository.existsActiveOrderOnTableFromTime(8, checkedIn.getCheckInAt())).thenReturn(false);
         when(bookingUseCaseService.cancelBookingNoOrderTimeout(anyInt(), any(LocalDateTime.class))).thenReturn(cancelled);
 
         bookingSchedulerService.processNoOrderTimeoutFlow();

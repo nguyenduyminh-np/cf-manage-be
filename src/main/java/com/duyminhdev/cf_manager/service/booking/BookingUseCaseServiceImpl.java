@@ -20,7 +20,9 @@ import com.duyminhdev.cf_manager.validator.booking.BookingValidationContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -359,6 +361,38 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
                     saved.getId(),
                     saved.getTable().getId()
             );
+            return saved;
+        });
+    }
+
+    @Override
+    @Transactional
+    public TableBooking markDepositPaid(Integer bookingId, BigDecimal depositAmount, String depositTxnRef, LocalDateTime paidAt) {
+        requirePositive(bookingId, "bookingId is required");
+
+        TableBooking beforeLock = loadActiveBooking(bookingId);
+        Integer tableId = requireTableId(beforeLock);
+
+        return bookingLockService.executeWithTableLock(tableId, () -> {
+            TableBooking booking = loadActiveBooking(bookingId);
+            BookingStatusEnum currentStatus = BookingStatusEnum.fromCode(booking.getBookingStatus());
+            if (currentStatus.isCancelled() || currentStatus.isCompleted() || currentStatus == BookingStatusEnum.EXPIRED) {
+                throw new InvalidDataException("deposit action is not allowed for terminal booking status");
+            }
+
+            BigDecimal effectiveAmount = depositAmount != null ? depositAmount : booking.getDepositAmount();
+            if (effectiveAmount == null || effectiveAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new InvalidDataException("depositAmount must be > 0");
+            }
+
+            booking.setDepositAmount(effectiveAmount);
+            booking.setDepositPaid(true);
+            booking.setDepositPaidAt(paidAt != null ? paidAt : LocalDateTime.now());
+            booking.setDepositForfeited(false);
+            booking.setDepositTxnRef(StringUtils.hasText(depositTxnRef) ? depositTxnRef.trim() : booking.getDepositTxnRef());
+
+            TableBooking saved = tableBookingRepository.save(booking);
+            bookingDomainEventPublisher.publish(BookingMutationType.DEPOSIT, saved.getId(), saved.getTable().getId());
             return saved;
         });
     }
