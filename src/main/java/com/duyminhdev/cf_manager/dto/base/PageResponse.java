@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class PageResponse<T> {
-    private T data;
+    private T rows;
     private int pageNo;
     private int pageSize;
     private int totalElements;

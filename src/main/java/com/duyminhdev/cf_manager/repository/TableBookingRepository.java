@@ -134,7 +134,6 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             @Param("endTime") LocalDateTime endTime
     );
 
-    @EntityGraph(attributePaths = {"table", "account"})
     @Query(value = """
             select tb.*
             from table_booking tb
@@ -151,7 +150,6 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             @Param("endTime") LocalDateTime endTime
     );
 
-    @EntityGraph(attributePaths = {"table", "account"})
     @Query(value = """
             select tb.*
             from table_booking tb
@@ -171,7 +169,6 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
         return findNextConfirmedBookingOnTableInternal(tableId, afterTime).stream().findFirst();
     }
 
-    @EntityGraph(attributePaths = {"table", "account"})
     @Query(value = """
             select tb.*
             from table_booking tb
@@ -183,7 +180,6 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """, nativeQuery = true)
     List<TableBooking> findConfirmedNoShowCandidates(@Param("nowTime") LocalDateTime nowTime);
 
-    @EntityGraph(attributePaths = {"table", "account"})
     @Query(value = """
             select tb.*
             from table_booking tb

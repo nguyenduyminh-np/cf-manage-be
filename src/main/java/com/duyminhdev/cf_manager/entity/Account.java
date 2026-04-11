@@ -42,7 +42,7 @@ public class Account {
     private LocalDateTime createdTime;
 
     @Builder.Default
-    @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
+    @Column(name = "is_active", nullable = false)
     private Boolean active = true;
 
     // FK_Account_RoleId_Role

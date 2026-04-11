@@ -92,7 +92,7 @@ public class TableBookingServiceImpl implements TableBookingService {
                 .toList();
 
         PageResponse<List<TableBookingResponseDTO>> response = new PageResponse<>();
-        response.setData(data);
+        response.setRows(data);
         response.setPageNo(page.getNumber());
         response.setPageSize(page.getSize());
         response.setTotalElements((int) page.getTotalElements());

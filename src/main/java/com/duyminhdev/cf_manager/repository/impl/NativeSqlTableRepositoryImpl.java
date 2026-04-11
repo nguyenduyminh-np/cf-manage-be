@@ -88,7 +88,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
         int totalPages = PageUtils.calculateTotalPages(totalElements, pageSize);
 
         PageResponse<List<TableSearchNativeResultDTO>> response = new PageResponse<>();
-        response.setData(data);
+        response.setRows(data);
         response.setPageNo(pageNo);
         response.setPageSize(pageSize);
         response.setTotalElements((int) totalElements);

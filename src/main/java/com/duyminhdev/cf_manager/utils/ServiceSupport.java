@@ -31,6 +31,10 @@ public class ServiceSupport {
      * Đây là rule chung dùng ở booking/order/invoice.
      */
     public Account getCurrentAccount() {
+        if (!SecurityUtils.isAuthenticated()) {
+            throw new InvalidDataException("Authentication is required for this operation");
+        }
+
         String username = SecurityUtils.getCurrentUsername();
         return accountRepository.findByUsername(username)
                 .filter(account -> Boolean.TRUE.equals(account.getActive()))

@@ -43,12 +43,12 @@ public class TableServiceImpl implements TableService {
          */
         PageResponse<List<TableSearchNativeResultDTO>> pageResult = nativeSqlTableRepository.search(request);
 
-        List<TableSearchResponseDTO> mapped = pageResult.getData().stream()
+        List<TableSearchResponseDTO> mapped = pageResult.getRows().stream()
                 .map(tableMapper::toSearchResponseDTO)
                 .toList();
 
         PageResponse<List<TableSearchResponseDTO>> response = new PageResponse<>();
-        response.setData(mapped);
+        response.setRows(mapped);
         response.setPageNo(pageResult.getPageNo());
         response.setPageSize(pageResult.getPageSize());
         response.setTotalElements(pageResult.getTotalElements());

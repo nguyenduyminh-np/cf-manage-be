@@ -1,0 +1,659 @@
+{
+  "info": {
+    "_postman_id": "8d0f7d5f-65fd-4e1e-97df-4bc14a2d3f31",
+    "name": "CF Manager - Booking Business Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection test cac API booking nghiep vu da implement theo CORE_BUSINESS_BOOKING_MANAGE_STATE, da can chinh theo du lieu mau account/dining_table/table_booking."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function pad(n){ return String(n).padStart(2, '0'); }",
+          "function toLocalDateTime(date){",
+          "  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());",
+          "}",
+          "const now = new Date();",
+          "const nowPlus5m = new Date(now.getTime() + 5 * 60 * 1000);",
+          "const nowPlus30m = new Date(now.getTime() + 30 * 60 * 1000);",
+          "const futureArriveAt = new Date(now.getTime() + 130 * 60 * 1000);",
+          "const futureCheckoutAt = new Date(now.getTime() + 250 * 60 * 1000);",
+          "const futureArriveAt2 = new Date(now.getTime() + 140 * 60 * 1000);",
+          "const futureCheckoutAt2 = new Date(now.getTime() + 280 * 60 * 1000);",
+          "const walkInCheckoutAt = new Date(now.getTime() + 125 * 60 * 1000);",
+          "pm.collectionVariables.set('nowAt', toLocalDateTime(now));",
+          "pm.collectionVariables.set('nowPlus5m', toLocalDateTime(nowPlus5m));",
+          "pm.collectionVariables.set('nowPlus30m', toLocalDateTime(nowPlus30m));",
+          "pm.collectionVariables.set('futureArriveAt', toLocalDateTime(futureArriveAt));",
+          "pm.collectionVariables.set('futureCheckoutAt', toLocalDateTime(futureCheckoutAt));",
+          "pm.collectionVariables.set('futureArriveAt2', toLocalDateTime(futureArriveAt2));",
+          "pm.collectionVariables.set('futureCheckoutAt2', toLocalDateTime(futureCheckoutAt2));",
+          "pm.collectionVariables.set('walkInCheckoutAt', toLocalDateTime(walkInCheckoutAt));"
+        ]
+      }
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "tableId",
+      "value": "1"
+    },
+    {
+      "key": "sampleExpiredTableId",
+      "value": "11"
+    },
+    {
+      "key": "sampleCancelledTableId",
+      "value": "22"
+    },
+    {
+      "key": "bookingId",
+      "value": ""
+    },
+    {
+      "key": "walkInBookingId",
+      "value": ""
+    },
+    {
+      "key": "bookingStatus",
+      "value": "PENDING_CONFIRMATION"
+    },
+    {
+      "key": "username",
+      "value": "admin"
+    },
+    {
+      "key": "password",
+      "value": "123456"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "existingCompletedBookingId",
+      "value": "148"
+    },
+    {
+      "key": "existingExpiredBookingId",
+      "value": "20"
+    },
+    {
+      "key": "existingCancelledBookingId",
+      "value": "239"
+    },
+    {
+      "key": "nowAt",
+      "value": ""
+    },
+    {
+      "key": "nowPlus5m",
+      "value": ""
+    },
+    {
+      "key": "nowPlus30m",
+      "value": ""
+    },
+    {
+      "key": "futureArriveAt",
+      "value": ""
+    },
+    {
+      "key": "futureCheckoutAt",
+      "value": ""
+    },
+    {
+      "key": "futureArriveAt2",
+      "value": ""
+    },
+    {
+      "key": "futureCheckoutAt2",
+      "value": ""
+    },
+    {
+      "key": "walkInCheckoutAt",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Auth Login",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        },
+        "description": "Dang nhap de lay JWT accessToken/refreshToken truoc khi test booking APIs."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Login returns access token', function () {",
+              "  pm.expect(json).to.have.property('accessToken');",
+              "  pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+              "});",
+              "",
+              "pm.collectionVariables.set('accessToken', json.accessToken || '');",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken || '');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Search Booking (COMPLETED sample)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page\": 1,\n  \"limit\": 20,\n  \"sortField\": \"expectedArriveTime\",\n  \"sortDir\": \"desc\",\n  \"tableId\": {{tableId}},\n  \"bookingStatus\": \"COMPLETED\",\n  \"customerName\": \"\",\n  \"phoneNumber\": \"\",\n  \"check_in_at\": null,\n  \"check_out_at\": null,\n  \"active\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "search"]
+        },
+        "description": "Tim booking theo du lieu mau table_booking (uu tien status COMPLETED, vi sample co nhieu ban ghi lich su)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('ApiResponse has status/message', function () {",
+              "  pm.expect(json).to.have.property('status');",
+              "  pm.expect(json).to.have.property('message');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tableId\": {{tableId}},\n  \"expectedArriveTime\": \"{{futureArriveAt}}\",\n  \"expectedCheckOut\": \"{{futureCheckoutAt}}\",\n  \"customerName\": \"Trinh Huy Khoi\",\n  \"phoneNumber\": \"0901234567\",\n  \"depositAmount\": 200000,\n  \"depositPaid\": false,\n  \"note\": \"Booking tao bang Postman theo sample data\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "create"]
+        },
+        "description": "Tao booking moi."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Create response contains bookingId', function () {",
+              "  pm.expect(json).to.have.property('data');",
+              "  pm.expect(json.data).to.have.property('bookingId');",
+              "});",
+              "",
+              "if (json && json.data && json.data.bookingId) {",
+              "  pm.collectionVariables.set('bookingId', String(json.data.bookingId));",
+              "  if (json.data.bookingStatus) pm.collectionVariables.set('bookingStatus', String(json.data.bookingStatus));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Update Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": {{bookingId}},\n  \"tableId\": {{tableId}},\n  \"expectedArriveTime\": \"{{futureArriveAt2}}\",\n  \"expectedCheckOut\": \"{{futureCheckoutAt2}}\",\n  \"customerName\": \"Le Van Tam\",\n  \"phoneNumber\": \"0901234567\",\n  \"depositAmount\": 250000,\n  \"depositPaid\": false,\n  \"note\": \"Update bang Postman theo sample data\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/update",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "update"]
+        },
+        "description": "Cap nhat thong tin booking."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Confirm Booking",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/{{bookingId}}/confirm",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "{{bookingId}}", "confirm"]
+        },
+        "description": "Xac nhan booking."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "if (json && json.data && json.data.bookingStatus) {",
+              "  pm.collectionVariables.set('bookingStatus', String(json.data.bookingStatus));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Deposit Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"depositAmount\": 300000,\n  \"depositPaidAt\": \"{{nowAt}}\",\n  \"depositTxnRef\": \"MOMO-POSTMAN-001\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/{{bookingId}}/deposit",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "{{bookingId}}", "deposit"]
+        },
+        "description": "Ghi nhan coc cho booking."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Check-in Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"checkInAt\": \"{{nowAt}}\",\n  \"force\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/{{bookingId}}/check-in",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "{{bookingId}}", "check-in"]
+        },
+        "description": "Nhan ban cho khach."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 400', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+              "});",
+              "const json = pm.response.json();",
+              "if (json && json.data && json.data.bookingStatus) {",
+              "  pm.collectionVariables.set('bookingStatus', String(json.data.bookingStatus));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Extend Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expectedCheckOut\": \"{{futureCheckoutAt2}}\",\n  \"force\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/{{bookingId}}/extend",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "{{bookingId}}", "extend"]
+        },
+        "description": "Gia han expected checkout."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 400', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Check-out Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"checkOutAt\": \"{{nowPlus30m}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/{{bookingId}}/check-out",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "{{bookingId}}", "check-out"]
+        },
+        "description": "Check-out booking sau khi da check-in."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 400', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Create Walk-in Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tableId\": {{tableId}},\n  \"expectedArriveTime\": \"{{nowPlus5m}}\",\n  \"expectedCheckOut\": \"{{walkInCheckoutAt}}\",\n  \"customerName\": \"Vu Hoang\",\n  \"phoneNumber\": \"0909999999\",\n  \"depositAmount\": 0,\n  \"depositPaid\": false,\n  \"note\": \"Walk-in create by Postman theo sample data\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/walk-in?force=false",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "walk-in"],
+          "query": [
+            {
+              "key": "force",
+              "value": "false"
+            }
+          ]
+        },
+        "description": "Tao booking walk-in."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 400', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+              "});",
+              "const json = pm.response.json();",
+              "if (json && json.data && json.data.bookingId) {",
+              "  pm.collectionVariables.set('walkInBookingId', String(json.data.bookingId));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Legacy Update Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": {{bookingId}},\n  \"bookingStatus\": \"CONFIRMED\",\n  \"checkInAt\": null,\n  \"checkOutAt\": null\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/update-status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "update-status"]
+        },
+        "description": "Endpoint tuong thich he cu; dung khi can verify backward compatibility."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200 or 400', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Cancel Booking",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/{{bookingId}}/cancel",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "{{bookingId}}", "cancel"]
+        },
+        "description": "Huy booking (chay voi booking con hop le)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Response should be 200 or business error', function () {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Search EXPIRED Sample",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page\": 1,\n  \"limit\": 20,\n  \"sortField\": \"expectedArriveTime\",\n  \"sortDir\": \"desc\",\n  \"tableId\": {{sampleExpiredTableId}},\n  \"bookingStatus\": \"EXPIRED\",\n  \"customerName\": \"\",\n  \"phoneNumber\": \"\",\n  \"check_in_at\": null,\n  \"check_out_at\": null,\n  \"active\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "search"]
+        },
+        "description": "Search theo mau du lieu EXPIRED (vd sample dining_table_id=11, booking id 20)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Search CANCELLED Sample",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page\": 1,\n  \"limit\": 20,\n  \"sortField\": \"expectedArriveTime\",\n  \"sortDir\": \"desc\",\n  \"tableId\": {{sampleCancelledTableId}},\n  \"bookingStatus\": \"CANCELLED\",\n  \"customerName\": \"\",\n  \"phoneNumber\": \"\",\n  \"check_in_at\": null,\n  \"check_out_at\": null,\n  \"active\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/table-booking/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "table-booking", "search"]
+        },
+        "description": "Search theo mau du lieu CANCELLED (vd sample dining_table_id=22, booking id 239)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

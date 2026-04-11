@@ -78,7 +78,7 @@ public class DishServiceImpl implements DishService {
                 .toList();
 
         PageResponse<List<DishResponseDTO>> response = new PageResponse<>();
-        response.setData(data);
+        response.setRows(data);
         response.setPageNo(page.getNumber());
         response.setPageSize(page.getSize());
         response.setTotalElements((int) page.getTotalElements());
