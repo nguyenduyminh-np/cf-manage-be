@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "attendance")
@@ -13,13 +13,13 @@ public class Attendance {
     private Integer id;
 
     @Column(name = "check_in_at", nullable = false)
-    private LocalDateTime checkInTime;
+    private Instant checkInTime;
 
     @Column(name = "check_out_at")
-    private LocalDateTime checkOutTime;
+    private Instant checkOutTime;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")

@@ -23,12 +23,22 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
                          AuthenticationException authException) throws IOException, ServletException {
+        String code = (String) request.getAttribute("auth_error_code");
+        String message = (String) request.getAttribute("auth_error_message");
+
+        if (code == null || code.isBlank()) {
+            code = "AUTH_UNAUTHORIZED";
+        }
+        if (message == null || message.isBlank()) {
+            message = "Yêu cầu chưa được xác thực hoặc token không hợp lệ";
+        }
+
         ErrorResponse body = ErrorResponse.builder()
                 .timestamp(OffsetDateTime.now())
                 .status(HttpStatus.UNAUTHORIZED.value())
                 .error("Unauthorized")
-                .code("AUTH_UNAUTHORIZED")
-                .message("Request is not authenticated or token is invalid")
+                .code(code)
+                .message(message)
                 .path(request.getRequestURI())
                 .build();
 

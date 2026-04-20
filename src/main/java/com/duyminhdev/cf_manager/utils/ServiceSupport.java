@@ -10,7 +10,8 @@ import com.duyminhdev.cf_manager.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -70,32 +71,33 @@ public class ServiceSupport {
     /**
      * check thời gian đặt bàn
      */
-    public void validateExpectedArriveTime(LocalDateTime expectedArriveTime) {
+    public void validateExpectedArriveTime(Instant expectedArriveTime) {
         if (expectedArriveTime == null) {
-            throw new InvalidDataException("expectedArriveTime is required");
+            throw new InvalidDataException("Thời gian đặt bàn không được để trống");
         }
-        if (expectedArriveTime.isBefore(LocalDateTime.now())) {
-            throw new InvalidDataException("expectedArriveTime must not be in the past");
-        }
+        // Temporarily disable rule: expectedArriveTime must be at least 2 hours after current time.
+        // if (expectedArriveTime.isBefore(Instant.now().plus(Duration.ofHours(2)))) {
+        //     throw new InvalidDataException("Thời gian đặt bàn phải sớm hơn thời điểm hiện tại ít nhất 2 tiếng");
+        // }
     }
 
-    public void validateExpectedCheckoutTime(LocalDateTime expectedArriveTime, LocalDateTime expectedCheckOut) {
+    public void validateExpectedCheckoutTime(Instant expectedArriveTime, Instant expectedCheckOut) {
         if (expectedArriveTime == null) {
             throw new InvalidDataException("expectedArriveTime is required");
         }
         if (expectedCheckOut == null) {
             throw new InvalidDataException("expectedCheckOut is required");
         }
-        if (expectedCheckOut.isBefore(expectedArriveTime) || expectedCheckOut.isEqual(expectedArriveTime)) {
+        if (expectedCheckOut.isBefore(expectedArriveTime) || expectedCheckOut.equals(expectedArriveTime)) {
             throw new InvalidDataException("expectedCheckOut must be greater than expectedArriveTime");
         }
     }
 
     public void validateBookingTimes(
-            LocalDateTime expectedArriveTime,
-            LocalDateTime expectedCheckOut,
-            LocalDateTime checkInAt,
-            LocalDateTime checkOutAt
+            Instant expectedArriveTime,
+            Instant expectedCheckOut,
+            Instant checkInAt,
+            Instant checkOutAt
     ) {
         if (expectedArriveTime != null && expectedCheckOut != null) {
             validateExpectedCheckoutTime(expectedArriveTime, expectedCheckOut);
@@ -153,8 +155,8 @@ public class ServiceSupport {
      * Chỉ tính các booking còn hiệu lực giữ bàn.
      */
     public boolean hasUpcomingActiveBooking(Integer tableId) {
-        LocalDateTime fromTime = LocalDateTime.now();
-        LocalDateTime toTime = fromTime.plusMinutes(RESERVE_WINDOW_MINUTES);
+        Instant fromTime = Instant.now();
+        Instant toTime = fromTime.plus(Duration.ofMinutes(RESERVE_WINDOW_MINUTES));
 
         return tableBookingRepository.existsUpcomingActiveBookingByTableIdAndStatuses(
                 tableId,
@@ -179,11 +181,18 @@ public class ServiceSupport {
         );
     }
 
+    public boolean hasActiveCheckedInBooking(Integer tableId) {
+        return tableBookingRepository.existsActiveBookingOnTableByStatuses(
+                tableId,
+                List.of(BookingStatusEnum.CHECKED_IN.getCode())
+        );
+    }
+
     /**
      * Rule trạng thái bàn tập trung duy nhất tại đây.
      */
     public TableStatusEnum resolveTableStatus(Integer tableId) {
-        if (hasUnfinishedOrders(tableId)) {
+        if (hasActiveCheckedInBooking(tableId)) {
             return TableStatusEnum.OCCUPIED;
         }
 

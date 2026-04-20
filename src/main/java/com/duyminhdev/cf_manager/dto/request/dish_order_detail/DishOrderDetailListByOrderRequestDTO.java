@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class DishOrderDetailListByOrderRequestDTO {
 
-    @NotNull(message = "dishOrderId is required")
-    @Positive(message = "dishOrderId must be > 0")
+    @NotNull(message = "Mã đơn gọi món không được để trống")
+    @Positive(message = "Mã đơn gọi món phải lớn hơn 0")
     private Integer dishOrderId;
 }

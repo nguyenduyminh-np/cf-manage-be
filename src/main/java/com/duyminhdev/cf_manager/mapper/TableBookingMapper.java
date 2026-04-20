@@ -1,6 +1,7 @@
 package com.duyminhdev.cf_manager.mapper;
 
 
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableBookingDetailNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCreateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
@@ -38,5 +39,8 @@ public interface TableBookingMapper {
     @Mapping(target = "accountUsername", source = "account.username")
     @Mapping(target = "accountFullName", source = "account.fullName")
     TableBookingResponseDTO toResponseDTO(TableBooking entity);
+
+    @Mapping(target = "bookingStatusName", source = "bookingStatus", qualifiedByName = "toBookingStatusName")
+    TableBookingResponseDTO toResponseDTO(TableBookingDetailNativeResultDTO source);
 }
 

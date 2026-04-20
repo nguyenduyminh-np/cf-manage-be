@@ -9,8 +9,8 @@ import lombok.Setter;
 @Setter
 public class DishOrderDetailListByTableRequestDTO {
 
-    @NotNull(message = "tableId is required")
-    @Positive(message = "tableId must be > 0")
+    @NotNull(message = "Mã bàn không được để trống")
+    @Positive(message = "Mã bàn phải lớn hơn 0")
     private Integer tableId;
 }
 

@@ -65,6 +65,6 @@ public interface DishOrderRepository extends JpaRepository<DishOrder, Integer> {
             """)
     boolean existsActiveOrderOnTableFromTime(
             @Param("tableId") Integer tableId,
-            @Param("fromTime") java.time.LocalDateTime fromTime
+            @Param("fromTime") java.time.Instant fromTime
     );
 }

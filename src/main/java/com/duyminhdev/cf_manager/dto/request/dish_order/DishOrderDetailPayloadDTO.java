@@ -7,17 +7,17 @@ import lombok.Data;
 
 @Data
 public class DishOrderDetailPayloadDTO {
-    @Positive(message = "detailId must be > 0")
+    @Positive(message = "Mã chi tiết đơn gọi phải lớn hơn 0")
     private Integer detailId;
 
-    @NotNull(message = "dishId is required")
-    @Positive(message = "dishId must be > 0")
+    @NotNull(message = "Mã món ăn không được để trống")
+    @Positive(message = "Mã món ăn phải lớn hơn 0")
     private Integer dishId;
 
-    @NotNull(message = "quantity is required")
-    @Positive(message = "quantity must be > 0")
+    @NotNull(message = "Số lượng không được để trống")
+    @Positive(message = "Số lượng phải lớn hơn 0")
     private Integer quantity;
 
-    @Size(max = 500, message = "note must be <= 500 characters")
+    @Size(max = 500, message = "Ghi chú món ăn không được vượt quá 500 ký tự")
     private String note;
 }

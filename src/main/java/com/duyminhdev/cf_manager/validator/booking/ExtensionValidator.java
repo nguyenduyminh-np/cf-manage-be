@@ -7,7 +7,8 @@ import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -15,6 +16,11 @@ import java.util.List;
 public class ExtensionValidator extends AbstractBookingValidationRule {
 
     private final TableBookingRepository tableBookingRepository;
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_13_EXTENSION";
+    }
 
     @Override
     public int order() {
@@ -30,15 +36,15 @@ public class ExtensionValidator extends AbstractBookingValidationRule {
     public void validate(BookingValidationContext context) {
         Integer tableId = context.resolveTableId();
         if (tableId == null) {
-            fail("tableId is required for extension check");
+            fail("Mã bàn (tableId) là bắt buộc để kiểm tra gia hạn");
         }
 
-        LocalDateTime candidateCheckOut = context.resolveExpectedCheckOut();
+        Instant candidateCheckOut = context.resolveExpectedCheckOut();
         if (candidateCheckOut == null) {
-            fail("expectedCheckOut is required for extension check");
+            fail("Thời gian trả bàn mới (expectedCheckOut) là bắt buộc để kiểm tra gia hạn");
         }
 
-        LocalDateTime now = context.getNow();
+        Instant now = context.getNow();
         Integer excludeBookingId = context.resolveBookingId();
 
         List<TableBooking> nextBookings = tableBookingRepository.findConfirmedBookingsFromTime(
@@ -52,9 +58,9 @@ public class ExtensionValidator extends AbstractBookingValidationRule {
             return;
         }
 
-        LocalDateTime nextExpectedArrive = nextBookings.getFirst().getExpectedArriveTime();
-        if (nextExpectedArrive != null && !nextExpectedArrive.isAfter(candidateCheckOut.plusMinutes(30))) {
-            fail("extension conflicts with next confirmed booking within protected 30-minute window");
+        Instant nextExpectedArrive = nextBookings.getFirst().getExpectedArriveTime();
+        if (nextExpectedArrive != null && !nextExpectedArrive.isAfter(candidateCheckOut.plus(Duration.ofMinutes(30)))) {
+            fail("Thời gian gia hạn xung đột với đặt bàn kế tiếp trong khoảng bảo vệ 30 phút");
         }
     }
 }

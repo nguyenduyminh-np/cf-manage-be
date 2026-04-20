@@ -8,7 +8,8 @@ import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -16,6 +17,11 @@ import java.util.List;
 public class BookingOwnershipValidator extends AbstractBookingValidationRule {
 
     private final TableBookingRepository tableBookingRepository;
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_11_BOOKING_OWNERSHIP";
+    }
 
     @Override
     public int order() {
@@ -31,15 +37,15 @@ public class BookingOwnershipValidator extends AbstractBookingValidationRule {
     public void validate(BookingValidationContext context) {
         TableBooking booking = context.getBooking();
         if (booking == null) {
-            fail("booking is required for ownership check");
+            fail("Thông tin đặt bàn (booking) là bắt buộc để kiểm tra quyền sử dụng bàn");
         }
 
         if (booking.getTable() == null || booking.getTable().getTableStatus() == null) {
             return;
         }
 
-        LocalDateTime checkInAt = context.resolveCheckInOrNow();
-        LocalDateTime arriveAt = context.resolveExpectedArriveTime();
+        Instant checkInAt = context.resolveCheckInOrNow();
+        Instant arriveAt = context.resolveExpectedArriveTime();
         if (arriveAt == null || !checkInAt.isBefore(arriveAt)) {
             return;
         }
@@ -52,7 +58,7 @@ public class BookingOwnershipValidator extends AbstractBookingValidationRule {
         Integer tableId = context.resolveTableId();
         List<TableBooking> nearestConfirmed = tableBookingRepository.findConfirmedBookingsFromTime(
                 tableId,
-                context.getNow().minusMinutes(30),
+                context.getNow().minus(Duration.ofMinutes(30)),
                 BookingStatusEnum.CONFIRMED.getCode(),
                 null
         );
@@ -63,7 +69,7 @@ public class BookingOwnershipValidator extends AbstractBookingValidationRule {
 
         Integer ownerBookingId = nearestConfirmed.getFirst().getId();
         if (ownerBookingId != null && !ownerBookingId.equals(booking.getId())) {
-            fail("booked table is reserved by another booking; check-in is blocked");
+            fail("Bàn đã được giữ cho đặt bàn khác; không thể thực hiện check-in lúc này");
         }
     }
 }

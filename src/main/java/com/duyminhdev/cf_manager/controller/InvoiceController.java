@@ -9,6 +9,7 @@ import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceConfirmPaymentRespo
 import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceCountResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceDetailResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/invoice")
 @RequiredArgsConstructor
+@AdminOrManagerAccess
 public class InvoiceController {
 
     private final InvoiceService invoiceService;

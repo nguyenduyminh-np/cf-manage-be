@@ -28,7 +28,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
                 .status(HttpStatus.FORBIDDEN.value())
                 .error("Forbidden")
                 .code("ACCESS_DENIED")
-                .message("You do not have permission to access this resource")
+                .message("Bạn không có quyền truy cập tài nguyên này")
                 .path(request.getRequestURI())
                 .build();
 

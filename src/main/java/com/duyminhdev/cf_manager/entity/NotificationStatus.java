@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "notification_status")
@@ -21,7 +21,7 @@ public class NotificationStatus {
     private String description;
 
     @Column(name = "created_at")
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @Column(name = "is_active")
     private Boolean active;

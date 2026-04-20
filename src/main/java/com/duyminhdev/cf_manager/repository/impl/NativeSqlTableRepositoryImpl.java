@@ -1,8 +1,11 @@
 package com.duyminhdev.cf_manager.repository.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableAvailableNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableAvailableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.enums.TableStatusEnum;
 import com.duyminhdev.cf_manager.repository.NativeSqlTableRepository;
 import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import com.duyminhdev.cf_manager.utils.PageUtils;
@@ -55,6 +58,19 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
                 dt.is_active
             """;
 
+    private static final String SELECT_AVAILABLE_TABLES = """
+            SELECT
+                                dt.id AS tableId,
+                dt.table_name AS tableName,
+                dt.table_code AS tableCode,
+                                dt.table_status AS tableStatus,
+                                dt.floor AS floor,
+                                dt.slot AS slot
+            FROM dining_table dt
+            WHERE (dt.is_active = 1 OR dt.is_active = true)
+              AND UPPER(dt.table_status) = :tableStatus
+            """;
+
     @Override
     public PageResponse<List<TableSearchNativeResultDTO>> search(TableSearchRequestDTO request) {
         TableSearchRequestDTO safeRequest = request != null ? request : new TableSearchRequestDTO();
@@ -94,6 +110,62 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
         response.setTotalElements((int) totalElements);
         response.setTotalPages(totalPages);
         return response;
+    }
+
+    @Override
+    public List<TableAvailableNativeResultDTO> findAvailableTables(TableAvailableSearchRequestDTO request) {
+        TableAvailableSearchRequestDTO safeRequest = request != null ? request : new TableAvailableSearchRequestDTO();
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        String whereClause = buildAvailableWhereClause(safeRequest, params);
+        String sql = SELECT_AVAILABLE_TABLES + whereClause + " ORDER BY dt.floor ASC, dt.slot ASC, dt.id ASC ";
+
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        query.setParameter("tableStatus", TableStatusEnum.AVAILABLE.getCode());
+        bindParameters(query, params);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+
+        return tuples.stream()
+                .map(this::mapTupleToAvailableDto)
+                .toList();
+    }
+
+    private String buildAvailableWhereClause(TableAvailableSearchRequestDTO request, Map<String, Object> params) {
+        StringBuilder sql = new StringBuilder();
+
+        if (request == null) {
+            return sql.toString();
+        }
+
+        if (StringUtils.hasText(request.getTableName())) {
+            sql.append("""
+                     AND (
+                        LOWER(dt.table_name) LIKE :tableNameKeyword ESCAPE '\\\\'
+                        OR TRIM(
+                            CASE
+                                WHEN LOWER(dt.table_name) LIKE 'bàn %' THEN SUBSTRING(LOWER(dt.table_name), 5)
+                                ELSE LOWER(dt.table_name)
+                            END
+                        ) LIKE :tableNameKeyword ESCAPE '\\\\'
+                     )
+                    """);
+            String tableNameKeyword = "%" + NativeSqlTupleUtils.escapeLike(request.getTableName().trim().toLowerCase()) + "%";
+            params.put("tableNameKeyword", tableNameKeyword);
+        }
+
+        if (request.getFloor() != null) {
+            sql.append(" AND dt.floor = :floor ");
+            params.put("floor", request.getFloor());
+        }
+
+        if (request.getSeat() != null) {
+            sql.append(" AND dt.slot = :seat ");
+            params.put("seat", request.getSeat());
+        }
+
+        return sql.toString();
     }
 
     private long countTotalElements(TableSearchRequestDTO request) {
@@ -168,7 +240,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
         String dbColumn = mapSortFieldToDbColumn(sortField);
 
         if (!StringUtils.hasText(dbColumn)) {
-            return " ORDER BY lastBookingTime DESC, dt.id DESC ";
+            return " ORDER BY dt.table_name ASC, dt.id ASC ";
         }
 
         String direction = "ASC".equalsIgnoreCase(sortDir) ? "ASC" : "DESC";
@@ -203,8 +275,19 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
                 .floor(NativeSqlTupleUtils.getInteger(tuple, "floor"))
                 .slot(NativeSqlTupleUtils.getInteger(tuple, "slot"))
                 .totalBooking(NativeSqlTupleUtils.getInteger(tuple, "totalBooking"))
-                .lastBookingTime(NativeSqlTupleUtils.getLocalDateTime(tuple, "lastBookingTime"))
+                .lastBookingTime(NativeSqlTupleUtils.getInstant(tuple, "lastBookingTime"))
                 .active(NativeSqlTupleUtils.getBoolean(tuple, "active"))
+                .build();
+    }
+
+    private TableAvailableNativeResultDTO mapTupleToAvailableDto(Tuple tuple) {
+        return TableAvailableNativeResultDTO.builder()
+                .tableId(NativeSqlTupleUtils.getInteger(tuple, "tableId"))
+                .tableName(NativeSqlTupleUtils.getString(tuple, "tableName"))
+                .tableCode(NativeSqlTupleUtils.getString(tuple, "tableCode"))
+                .tableStatus(NativeSqlTupleUtils.getString(tuple, "tableStatus"))
+                .floor(NativeSqlTupleUtils.getInteger(tuple, "floor"))
+                .slot(NativeSqlTupleUtils.getInteger(tuple, "slot"))
                 .build();
     }
 }

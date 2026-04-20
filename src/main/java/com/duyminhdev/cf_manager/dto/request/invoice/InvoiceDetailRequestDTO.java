@@ -9,8 +9,8 @@ import lombok.Setter;
 @Setter
 public class InvoiceDetailRequestDTO {
 
-    @NotNull(message = "invoiceId is required")
-    @Positive(message = "invoiceId must be > 0")
+    @NotNull(message = "Mã hóa đơn không được để trống")
+    @Positive(message = "Mã hóa đơn phải lớn hơn 0")
     private Integer invoiceId;
 }
 

@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 public class DishOrderListByTableRequestDTO {
-    @NotNull(message = "tableId is required")
-    @Positive(message = "tableId must be > 0")
+    @NotNull(message = "Mã bàn không được để trống")
+    @Positive(message = "Mã bàn phải lớn hơn 0")
     private Integer tableId;
 }

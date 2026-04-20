@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.dto.response.invoice;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Getter
@@ -34,7 +34,7 @@ public class InvoiceDetailResponseDTO {
     private BigDecimal totalMoney;
 
     private Boolean active;
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     private String uriVnPay;
 

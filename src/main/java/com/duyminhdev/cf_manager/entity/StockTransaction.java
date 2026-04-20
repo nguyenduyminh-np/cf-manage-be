@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "stock_transaction")
@@ -30,23 +30,23 @@ public class StockTransaction {
     private String status;
 
     @Column(name = "transaction_at")
-    private LocalDateTime transactionDate;
+    private Instant transactionDate;
     
     // Approval Tracking
     @Column(name = "approved_at")
-    private LocalDateTime approvedDate;
+    private Instant approvedDate;
     
     @Column(name = "approved_by_account_id") // Lưu ý: Database không set FK cho các cột UserBy này, nên dùng Integer
     private Integer approvedBy;
     
     @Column(name = "completed_at")
-    private LocalDateTime completedDate;
+    private Instant completedDate;
     
     @Column(name = "completed_by_account_id")
     private Integer completedBy;
     
     @Column(name = "canceled_at")
-    private LocalDateTime canceledDate;
+    private Instant canceledDate;
     
     @Column(name = "canceled_by_account_id")
     private Integer canceledBy;
@@ -56,7 +56,7 @@ public class StockTransaction {
     private String statusHistory;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")

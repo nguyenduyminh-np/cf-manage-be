@@ -1,16 +1,22 @@
 package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableBookingDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingAvailableSlotsRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCancelRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckInRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckOutRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingConfirmRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingDetailRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingDepositRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingExtendRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingStatusUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
-import com.duyminhdev.cf_manager.entity.Account;
 import com.duyminhdev.cf_manager.entity.TableBooking;
 import com.duyminhdev.cf_manager.entity.TableEntity;
 import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
@@ -19,6 +25,7 @@ import com.duyminhdev.cf_manager.event.booking.BookingMutationType;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
 import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
+import com.duyminhdev.cf_manager.repository.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.spec.TableBookingSpec;
 import com.duyminhdev.cf_manager.service.booking.BookingUseCaseService;
@@ -35,10 +42,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +68,11 @@ public class TableBookingServiceImpl implements TableBookingService {
             "createdAt"
     );
 
+    private static final List<String> SLOT_BLOCKING_STATUSES = List.of(
+            BookingStatusEnum.CONFIRMED.getCode(),
+            BookingStatusEnum.CHECKED_IN.getCode()
+    );
+
     private final TableBookingRepository tableBookingRepository;
     private final TableBookingMapper tableBookingMapper;
     private final ServiceSupport serviceSupport;
@@ -65,6 +80,18 @@ public class TableBookingServiceImpl implements TableBookingService {
     private final BookingLockService bookingLockService;
     private final BookingDomainEventPublisher bookingDomainEventPublisher;
     private final BookingUseCaseService bookingUseCaseService;
+    private final NativeSqlTableBookingRepository nativeSqlTableBookingRepository;
+
+    @Override
+    public List<TableBookingResponseDTO> getPendingAndConfirmedBookings(TableBookingSearchRequestDTO request) {
+        Integer tableId = request != null ? request.getTableId() : null;
+        List<TableBookingDetailNativeResultDTO> nativeResults =
+                nativeSqlTableBookingRepository.findPendingAndConfirmedBookings(tableId);
+
+        return nativeResults.stream()
+                .map(tableBookingMapper::toResponseDTO)
+                .collect(Collectors.toList());
+    }
 
     @Override
     public PageResponse<List<TableBookingResponseDTO>> search(TableBookingSearchRequestDTO request) {
@@ -135,8 +162,27 @@ public class TableBookingServiceImpl implements TableBookingService {
     @Override
     @Transactional
     public TableBookingResponseDTO create(TableBookingCreateRequestDTO request) {
+        if (request != null && Boolean.TRUE.equals(request.getIsWalkIn())) {
+            TableBooking savedWalkIn = bookingUseCaseService.createWalkIn(request, false);
+            return tableBookingMapper.toResponseDTO(savedWalkIn);
+        }
+
         TableBooking saved = bookingUseCaseService.createBooking(request);
         return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    public TableBookingResponseDTO detail(TableBookingDetailRequestDTO request) {
+        TableBookingDetailNativeResultDTO row =
+                nativeSqlTableBookingRepository.findBookingDetailByBookingId(request.getBookingId());
+
+        if (row == null) {
+            throw new InvalidDataException(
+                    "Không tìm thấy thấy chi tiết đặt bàn với bookingId: " + request.getBookingId()
+            );
+        }
+
+        return tableBookingMapper.toResponseDTO(row);
     }
 
     @Override
@@ -171,7 +217,7 @@ public class TableBookingServiceImpl implements TableBookingService {
         return bookingLockService.executeWithTableLocks(tableIdsToLock, () -> {
             TableBooking existing = tableBookingRepository.findByIdAndActiveTrue(request.getBookingId())
                     .orElseThrow(() -> new InvalidDataException(
-                            "Booking not found with id: " + request.getBookingId()
+                            "Không tìm thấy đặt bàn với id: " + request.getBookingId()
                     ));
 
             Integer currentOldTableId = existing.getTable() != null ? existing.getTable().getId() : null;
@@ -211,7 +257,7 @@ public class TableBookingServiceImpl implements TableBookingService {
             case COMPLETED -> bookingUseCaseService.checkOut(request.getBookingId(), request.getCheckOutAt());
             case CANCELLED -> bookingUseCaseService.cancelBooking(request.getBookingId());
             case EXPIRED -> bookingUseCaseService.expireBooking(request.getBookingId());
-            case PENDING -> throw new InvalidDataException("updateStatus does not support transition to PENDING_CONFIRMATION");
+            case PENDING -> throw new InvalidDataException("updateStatus không hỗ trợ chuyển trạng thái về CHờ_XÁC_NHẬN");
         }
 
         return true;
@@ -219,67 +265,209 @@ public class TableBookingServiceImpl implements TableBookingService {
 
     @Override
     @Transactional
-    public TableBookingResponseDTO confirm(Integer bookingId) {
-        TableBooking saved = bookingUseCaseService.confirmBooking(bookingId);
-        return tableBookingMapper.toResponseDTO(saved);
-    }
-
-    @Override
-    @Transactional
-    public TableBookingResponseDTO checkIn(Integer bookingId, TableBookingCheckInRequestDTO request) {
-        TableBookingCheckInRequestDTO safeRequest = request != null ? request : new TableBookingCheckInRequestDTO();
-        boolean force = Boolean.TRUE.equals(safeRequest.getForce());
-        TableBooking saved = bookingUseCaseService.checkIn(bookingId, safeRequest.getCheckInAt(), force);
-        return tableBookingMapper.toResponseDTO(saved);
-    }
-
-    @Override
-    @Transactional
-    public TableBookingResponseDTO checkOut(Integer bookingId, TableBookingCheckOutRequestDTO request) {
-        TableBookingCheckOutRequestDTO safeRequest = request != null ? request : new TableBookingCheckOutRequestDTO();
-        TableBooking saved = bookingUseCaseService.checkOut(bookingId, safeRequest.getCheckOutAt());
-        return tableBookingMapper.toResponseDTO(saved);
-    }
-
-    @Override
-    @Transactional
-    public TableBookingResponseDTO cancel(Integer bookingId) {
-        TableBooking saved = bookingUseCaseService.cancelBooking(bookingId);
-        return tableBookingMapper.toResponseDTO(saved);
-    }
-
-    @Override
-    @Transactional
-    public TableBookingResponseDTO extend(Integer bookingId, TableBookingExtendRequestDTO request) {
+    public TableBookingResponseDTO confirm(TableBookingConfirmRequestDTO request) {
         if (request == null) {
-            throw new InvalidDataException("extend request is required");
+            throw new InvalidDataException("Yêu cầu xác nhận booking không được để trống");
+        }
+
+        TableBooking saved = bookingUseCaseService.confirmBooking(request.getBookingId());
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO checkIn(TableBookingCheckInRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("Yêu cầu check-in không được để trống");
         }
 
         boolean force = Boolean.TRUE.equals(request.getForce());
-        TableBooking saved = bookingUseCaseService.extendBooking(bookingId, request.getExpectedCheckOut(), force);
+        TableBooking saved = bookingUseCaseService.checkIn(request.getBookingId(), request.getCheckInAt(), force);
         return tableBookingMapper.toResponseDTO(saved);
     }
 
     @Override
     @Transactional
-    public TableBookingResponseDTO createWalkIn(TableBookingCreateRequestDTO request, boolean force) {
-        TableBooking saved = bookingUseCaseService.createWalkIn(request, force);
-        return tableBookingMapper.toResponseDTO(saved);
-    }
-
-    @Override
-    @Transactional
-    public TableBookingResponseDTO deposit(Integer bookingId, TableBookingDepositRequestDTO request) {
+    public TableBookingResponseDTO checkOut(TableBookingCheckOutRequestDTO request) {
         if (request == null) {
-            throw new InvalidDataException("deposit request is required");
+            throw new InvalidDataException("Yêu cầu check-out không được để trống");
+        }
+
+        TableBooking saved = bookingUseCaseService.checkOut(request.getBookingId(), request.getCheckOutAt());
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO cancel(TableBookingCancelRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("Yêu cầu hủy booking không được để trống");
+        }
+
+        TableBooking saved = bookingUseCaseService.cancelBooking(request.getBookingId());
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO extend(TableBookingExtendRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("Yêu cầu gia hạn (extend request) không được để trống");
+        }
+
+        boolean force = Boolean.TRUE.equals(request.getForce());
+        TableBooking saved = bookingUseCaseService.extendBooking(request.getBookingId(), request.getExpectedCheckOut(), force);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO createWalkIn(TableBookingWalkInRequestDTO request, boolean force) {
+        if (request == null) {
+            throw new InvalidDataException("Yêu cầu walk-in không được để trống");
+        }
+        if (request.getTableId() == null || request.getTableId() <= 0) {
+            throw new InvalidDataException("Mã bàn (tableId) là bắt buộc");
+        }
+
+        TableBooking saved = bookingUseCaseService.createWalkIn(toCreateRequest(request), force);
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO createWalkInFromLateArrival(
+            Integer lateBookingId,
+            TableBookingWalkInRequestDTO request,
+            boolean force
+    ) {
+        TableBooking saved = bookingUseCaseService.createWalkInFromLateArrival(
+                lateBookingId,
+                toCreateRequestOrNull(request),
+                force
+        );
+        return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableBookingResponseDTO deposit(TableBookingDepositRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("Yêu cầu đặt cọc (deposit request) không được để trống");
         }
 
         TableBooking saved = bookingUseCaseService.markDepositPaid(
-                bookingId,
+                request.getBookingId(),
                 request.getDepositAmount(),
                 request.getDepositTxnRef(),
                 request.getDepositPaidAt()
         );
         return tableBookingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    public List<TableBookingAvailableSlotResponseDTO> getAvailableSlots(TableBookingAvailableSlotsRequestDTO request) {
+        if (request == null) {
+            throw new InvalidDataException("Yêu cầu tra cứu khung giờ trống không được để trống");
+        }
+
+        Integer tableId = request.getTableId();
+        LocalDate date = request.getDate();
+
+        if (tableId == null || tableId <= 0) {
+            throw new InvalidDataException("Mã bàn (tableId) là bắt buộc");
+        }
+        if (date == null) {
+            throw new InvalidDataException("Ngày tra cứu (date) là bắt buộc");
+        }
+
+        serviceSupport.getActiveTable(tableId);
+
+        Instant dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant dayEnd = dayStart.plusSeconds(86_400L);
+
+        List<TableBooking> blockingBookings = tableBookingRepository.findActiveBookingsOnTableBetweenByStatuses(
+                tableId,
+                dayStart,
+                dayEnd,
+                SLOT_BLOCKING_STATUSES
+        );
+
+        return buildAvailableSlots(dayStart, dayEnd, blockingBookings);
+    }
+
+    private List<TableBookingAvailableSlotResponseDTO> buildAvailableSlots(
+            Instant dayStart,
+            Instant dayEnd,
+            List<TableBooking> bookings
+    ) {
+        List<TableBookingAvailableSlotResponseDTO> slots = new ArrayList<>();
+        Instant cursor = dayStart;
+
+        for (TableBooking booking : bookings) {
+            if (booking.getExpectedArriveTime() == null || booking.getExpectedCheckOut() == null) {
+                continue;
+            }
+
+                Instant occupiedStart = booking.getExpectedArriveTime().isBefore(dayStart)
+                    ? dayStart
+                    : booking.getExpectedArriveTime();
+                Instant occupiedEnd = booking.getExpectedCheckOut().isAfter(dayEnd)
+                    ? dayEnd
+                    : booking.getExpectedCheckOut();
+
+            if (occupiedStart.isAfter(cursor)) {
+                slots.add(TableBookingAvailableSlotResponseDTO.builder()
+                        .slotStart(cursor)
+                        .slotEnd(occupiedStart)
+                        .build());
+            }
+
+            if (occupiedEnd.isAfter(cursor)) {
+                cursor = occupiedEnd;
+            }
+
+            if (!cursor.isBefore(dayEnd)) {
+                break;
+            }
+        }
+
+        if (cursor.isBefore(dayEnd)) {
+            slots.add(TableBookingAvailableSlotResponseDTO.builder()
+                    .slotStart(cursor)
+                    .slotEnd(dayEnd)
+                    .build());
+        }
+
+        return slots;
+    }
+
+    private TableBookingCreateRequestDTO toCreateRequest(TableBookingWalkInRequestDTO request) {
+        TableBookingCreateRequestDTO converted = toCreateRequestOrNull(request);
+        if (converted == null) {
+            throw new InvalidDataException("Yêu cầu walk-in không được để trống");
+        }
+        return converted;
+    }
+
+    private TableBookingCreateRequestDTO toCreateRequestOrNull(TableBookingWalkInRequestDTO request) {
+        if (request == null) {
+            return null;
+        }
+
+        TableBookingCreateRequestDTO converted = new TableBookingCreateRequestDTO();
+        converted.setTableId(request.getTableId());
+        converted.setExpectedArriveTime(request.getExpectedArriveTime());
+        converted.setExpectedCheckOut(request.getExpectedCheckOut());
+        converted.setCustomerName(request.getCustomerName());
+        converted.setPhoneNumber(request.getPhoneNumber());
+        converted.setDepositAmount(request.getDepositAmount());
+        converted.setDepositPaid(request.getDepositPaid());
+        converted.setDepositPaidAt(request.getDepositPaidAt());
+        converted.setDepositForfeited(request.getDepositForfeited());
+        converted.setDepositTxnRef(request.getDepositTxnRef());
+        converted.setBookingStatus(request.getBookingStatus());
+        converted.setNote(request.getNote());
+        return converted;
     }
 }

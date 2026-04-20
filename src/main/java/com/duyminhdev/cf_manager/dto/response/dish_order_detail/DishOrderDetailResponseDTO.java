@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.dto.response.dish_order_detail;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -26,6 +26,6 @@ public class DishOrderDetailResponseDTO {
 
     private String note;
     private Boolean active;
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 }
 

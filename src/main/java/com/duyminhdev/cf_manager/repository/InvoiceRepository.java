@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 @Repository
@@ -19,5 +19,5 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
     /**
      * Dùng để đếm số invoice trong ngày, phục vụ generate invoice code dạng HD-yyyyMMdd-xxxx.
      */
-    long countByCreatedTimeBetweenAndActiveTrue(LocalDateTime start, LocalDateTime end);
+    long countByCreatedTimeBetweenAndActiveTrue(Instant start, Instant end);
 }

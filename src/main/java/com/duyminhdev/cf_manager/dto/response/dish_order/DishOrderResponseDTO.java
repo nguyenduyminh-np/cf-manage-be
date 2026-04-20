@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.dto.response.dish_order;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -27,6 +27,6 @@ public class DishOrderResponseDTO {
 
     private String note;
     private Boolean active;
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 }
 

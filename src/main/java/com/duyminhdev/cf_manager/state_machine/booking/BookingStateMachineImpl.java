@@ -12,7 +12,8 @@ import com.duyminhdev.cf_manager.enums.BookingValidationUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
@@ -20,10 +21,13 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class BookingStateMachineImpl implements BookingStateMachine {
 
+    private static final String SOURCE_TAG = "BookingStateMachineImpl";
+
     private static final Map<BookingStatusEnum, Set<BookingStatusEnum>> ALLOWED_TRANSITIONS = Map.of(
             BookingStatusEnum.PENDING, Set.of(
                     BookingStatusEnum.CONFIRMED,
-                    BookingStatusEnum.CANCELLED
+                BookingStatusEnum.CANCELLED,
+                BookingStatusEnum.EXPIRED
             ),
             BookingStatusEnum.CONFIRMED, Set.of(
                     BookingStatusEnum.CHECKED_IN,
@@ -73,7 +77,7 @@ public class BookingStateMachineImpl implements BookingStateMachine {
             .expectedArriveTime(booking.getExpectedArriveTime())
             .expectedCheckOut(booking.getExpectedCheckOut())
             .excludeBookingId(booking.getId())
-            .now(LocalDateTime.now())
+            .now(Instant.now())
             .build();
 
         bookingRuleValidatorChain.validate(BookingValidationUseCase.CREATE_BOOKING, validationContext);
@@ -105,8 +109,8 @@ public class BookingStateMachineImpl implements BookingStateMachine {
             throw transitionNotAllowed("same-state transition is disabled for " + targetStatus.getCode());
         }
 
-        LocalDateTime resolvedCheckInAt = resolveCheckInAt(booking, targetStatus, context.getRequestedCheckInAt());
-        LocalDateTime resolvedCheckOutAt = resolveCheckOutAt(booking, targetStatus, context.getRequestedCheckOutAt());
+        Instant resolvedCheckInAt = resolveCheckInAt(booking, targetStatus, context.getRequestedCheckInAt());
+        Instant resolvedCheckOutAt = resolveCheckOutAt(booking, targetStatus, context.getRequestedCheckOutAt());
 
         BookingValidationContext validationContext = BookingValidationContext.builder()
             .booking(booking)
@@ -118,7 +122,7 @@ public class BookingStateMachineImpl implements BookingStateMachine {
             .expectedArriveTime(booking.getExpectedArriveTime())
             .expectedCheckOut(booking.getExpectedCheckOut())
             .excludeBookingId(booking.getId())
-            .now(LocalDateTime.now())
+            .now(Instant.now())
             .force(context.isForce())
             .build();
 
@@ -162,33 +166,33 @@ public class BookingStateMachineImpl implements BookingStateMachine {
         return ALLOWED_TRANSITIONS.getOrDefault(currentStatus, Set.of()).contains(targetStatus);
     }
 
-    private LocalDateTime resolveCheckInAt(
+    private Instant resolveCheckInAt(
             TableBooking booking,
             BookingStatusEnum targetStatus,
-            LocalDateTime requestedCheckInAt
+            Instant requestedCheckInAt
     ) {
-        LocalDateTime resolved = requestedCheckInAt != null ? requestedCheckInAt : booking.getCheckInAt();
+        Instant resolved = requestedCheckInAt != null ? requestedCheckInAt : booking.getCheckInAt();
 
         if (targetStatus == BookingStatusEnum.CHECKED_IN && resolved == null) {
-            return LocalDateTime.now();
+            return Instant.now();
         }
 
         if (targetStatus == BookingStatusEnum.COMPLETED && resolved == null) {
-            return LocalDateTime.now();
+            return Instant.now();
         }
 
         return resolved;
     }
 
-    private LocalDateTime resolveCheckOutAt(
+    private Instant resolveCheckOutAt(
             TableBooking booking,
             BookingStatusEnum targetStatus,
-            LocalDateTime requestedCheckOutAt
+            Instant requestedCheckOutAt
     ) {
-        LocalDateTime resolved = requestedCheckOutAt != null ? requestedCheckOutAt : booking.getCheckOutAt();
+        Instant resolved = requestedCheckOutAt != null ? requestedCheckOutAt : booking.getCheckOutAt();
 
         if (targetStatus == BookingStatusEnum.COMPLETED && resolved == null) {
-            return LocalDateTime.now();
+            return Instant.now();
         }
 
         return resolved;
@@ -198,8 +202,8 @@ public class BookingStateMachineImpl implements BookingStateMachine {
             BookingStatusEnum currentStatus,
             BookingStatusEnum targetStatus,
             TableBooking booking,
-            LocalDateTime resolvedCheckInAt,
-            LocalDateTime resolvedCheckOutAt,
+                Instant resolvedCheckInAt,
+                Instant resolvedCheckOutAt,
             BookingValidationContext validationContext
     ) {
         serviceSupport.validateBookingTimes(
@@ -232,48 +236,60 @@ public class BookingStateMachineImpl implements BookingStateMachine {
 
     private void validateCancelBeforeArrive(BookingStatusEnum currentStatus, TableBooking booking) {
         if (currentStatus == BookingStatusEnum.PENDING || currentStatus == BookingStatusEnum.CONFIRMED) {
-            LocalDateTime arrive = booking.getExpectedArriveTime();
-            if (arrive != null && LocalDateTime.now().isAfter(arrive)) {
-                throw ruleViolation("cannot cancel booking after expected arrive time");
+            Instant arrive = booking.getExpectedArriveTime();
+            if (arrive != null && Instant.now().isAfter(arrive)) {
+                throw ruleViolation("RULE_06_CANCEL_BEFORE_ARRIVE", "cannot cancel booking after expected arrive time");
             }
         }
     }
 
-    private void validateNoShowExpire(TableBooking booking, LocalDateTime resolvedCheckInAt) {
-        LocalDateTime arrive = booking.getExpectedArriveTime();
+    private void validateNoShowExpire(TableBooking booking, Instant resolvedCheckInAt) {
+        Instant arrive = booking.getExpectedArriveTime();
         if (arrive == null) {
-            throw ruleViolation("expectedArriveTime is required before EXPIRED");
+            throw ruleViolation("RULE_07_NO_SHOW_EXPIRE", "expectedArriveTime is required before EXPIRED");
         }
 
-        LocalDateTime threshold = arrive.plusMinutes(30);
-        if (!LocalDateTime.now().isAfter(threshold)) {
-            throw ruleViolation("booking is not eligible for EXPIRED before no-show threshold");
+        Instant threshold = arrive.plus(Duration.ofMinutes(30));
+        if (!Instant.now().isAfter(threshold)) {
+            throw ruleViolation("RULE_07_NO_SHOW_EXPIRE", "booking is not eligible for EXPIRED before no-show threshold");
         }
 
         if (resolvedCheckInAt != null) {
-            throw ruleViolation("checked-in booking cannot transition to EXPIRED");
+            throw ruleViolation("RULE_07_NO_SHOW_EXPIRE", "checked-in booking cannot transition to EXPIRED");
         }
     }
 
-    private void validateCompletedState(LocalDateTime resolvedCheckInAt, LocalDateTime resolvedCheckOutAt) {
+    private void validateCompletedState(Instant resolvedCheckInAt, Instant resolvedCheckOutAt) {
         if (resolvedCheckInAt == null) {
-            throw ruleViolation("checkInAt is required for COMPLETED");
+            throw ruleViolation("RULE_05_COMPLETED_REQUIRE_CHECKIN", "checkInAt is required for COMPLETED");
         }
 
         if (resolvedCheckOutAt == null) {
-            throw ruleViolation("checkOutAt is required for COMPLETED");
+            throw ruleViolation("RULE_05_COMPLETED_REQUIRE_CHECKOUT", "checkOutAt is required for COMPLETED");
         }
     }
 
     private BookingStateTransitionException guardFailed(String message) {
-        return new BookingStateTransitionException(BookingStateMachineConstant.PREFIX_GUARD_FAILED + message);
+        return new BookingStateTransitionException(
+                BookingStateMachineConstant.PREFIX_GUARD_FAILED + formatStateMachineMessage("STATE_MACHINE_GUARD", message)
+        );
     }
 
     private BookingStateTransitionException transitionNotAllowed(String message) {
-        return new BookingStateTransitionException(BookingStateMachineConstant.PREFIX_NOT_ALLOWED + message);
+        return new BookingStateTransitionException(
+                BookingStateMachineConstant.PREFIX_NOT_ALLOWED + formatStateMachineMessage("STATE_MACHINE_TRANSITION", message)
+        );
     }
 
-    private BookingStateTransitionException ruleViolation(String message) {
-        return new BookingStateTransitionException(BookingStateMachineConstant.PREFIX_RULE_VIOLATION + message);
+    private BookingStateTransitionException ruleViolation(String ruleTag, String message) {
+        return new BookingStateTransitionException(
+                BookingStateMachineConstant.PREFIX_RULE_VIOLATION + formatStateMachineMessage(ruleTag, message)
+        );
+    }
+
+    private String formatStateMachineMessage(String ruleTag, String message) {
+        String resolvedRuleTag = ruleTag == null || ruleTag.isBlank() ? "RULE_UNSPECIFIED" : ruleTag.trim();
+        String resolvedMessage = message == null ? "" : message.trim();
+        return "[" + resolvedRuleTag + "][" + SOURCE_TAG + "] " + resolvedMessage;
     }
 }

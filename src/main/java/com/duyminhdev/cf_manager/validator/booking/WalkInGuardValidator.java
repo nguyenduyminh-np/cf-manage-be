@@ -6,7 +6,7 @@ import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -14,6 +14,11 @@ import java.util.List;
 public class WalkInGuardValidator extends AbstractBookingValidationRule {
 
     private final TableBookingRepository tableBookingRepository;
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_09_16_WALK_IN_GUARD";
+    }
 
     @Override
     public int order() {
@@ -30,20 +35,28 @@ public class WalkInGuardValidator extends AbstractBookingValidationRule {
     public void validate(BookingValidationContext context) {
         Integer tableId = context.resolveTableId();
         if (tableId == null) {
-            fail("tableId is required for walk-in guard");
+            fail("Mã bàn (tableId) là bắt buộc để gác lịch walk-in");
         }
 
-        LocalDateTime now = context.getNow();
-        boolean hasNearConfirmed = tableBookingRepository.existsActiveBookingOnTableInWindowAndStatuses(
+        Instant start = context.resolveExpectedArriveTime();
+        Instant end = context.resolveExpectedCheckOut();
+        if (start == null || end == null) {
+            fail("Thời gian đến và trả bàn là bắt buộc để gác lịch walk-in");
+        }
+
+        boolean hasConflict = tableBookingRepository.existsConflictBookingOnTable(
                 tableId,
-                now,
-                now.plusMinutes(30),
-                List.of(BookingStatusEnum.CONFIRMED.getCode()),
+                start,
+                end,
+                List.of(
+                        BookingStatusEnum.CONFIRMED.getCode(),
+                        BookingStatusEnum.CHECKED_IN.getCode()
+                ),
                 context.resolveBookingId()
         );
 
-        if (hasNearConfirmed) {
-            fail("table is reserved by a confirmed booking in the next 30 minutes");
+        if (hasConflict) {
+            fail("Khoảng thời gian walk-in xung đột với đặt bàn đang hoạt động trên cùng bàn này");
         }
     }
 }

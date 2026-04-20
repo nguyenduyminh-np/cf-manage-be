@@ -13,7 +13,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 
@@ -61,7 +64,7 @@ class BookingMutationAfterCommitListenerTest {
                 .mutationType(BookingMutationType.CHECK_IN)
                 .bookingId(101)
                 .tableId(7)
-                .occurredAt(LocalDateTime.now())
+                .occurredAt(Instant.now())
                 .build();
 
         when(tableBookingRepository.findByIdAndActiveTrue(101)).thenReturn(Optional.of(booking));
@@ -102,7 +105,7 @@ class BookingMutationAfterCommitListenerTest {
                 .mutationType(BookingMutationType.DEPOSIT)
                 .bookingId(202)
                 .tableId(5)
-                .occurredAt(LocalDateTime.now())
+                .occurredAt(Instant.now())
                 .build();
 
         when(tableBookingRepository.findByIdAndActiveTrue(202)).thenReturn(Optional.of(booking));
@@ -113,5 +116,9 @@ class BookingMutationAfterCommitListenerTest {
         verify(bookingNotificationService).sendOnce(eq(BookingSchedulerConstant.TOPIC_BOOKING_UPDATES), any(), any());
         verify(bookingNotificationService).sendOnce(eq(BookingSchedulerConstant.TOPIC_DEPOSIT_EVENTS), any(), any());
         verify(bookingNotificationService, never()).sendOnce(eq(BookingSchedulerConstant.TOPIC_TABLE_STATUS), any(), any());
+    }
+
+    private static Instant at(int year, int month, int day, int hour, int minute) {
+        return java.time.LocalDateTime.of(year, month, day, hour, minute, 0).toInstant(java.time.ZoneOffset.UTC);
     }
 }

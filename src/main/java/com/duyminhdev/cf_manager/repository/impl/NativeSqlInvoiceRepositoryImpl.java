@@ -79,7 +79,7 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
                 .paymentMethod(NativeSqlTupleUtils.getString(tuple, "paymentMethod"))
                 .guestCount(NativeSqlTupleUtils.getInteger(tuple, "guestCount"))
                 .totalMoney(NativeSqlTupleUtils.getBigDecimal(tuple, "totalMoney"))
-                .createdTime(NativeSqlTupleUtils.getLocalDateTime(tuple, "createdTime"))
+                .createdTime(NativeSqlTupleUtils.getInstant(tuple, "createdTime"))
                 .invoiceDetailId(NativeSqlTupleUtils.getInteger(tuple, "invoiceDetailId"))
                 .dishId(NativeSqlTupleUtils.getInteger(tuple, "dishId"))
                 .dishCode(NativeSqlTupleUtils.getString(tuple, "dishCode"))

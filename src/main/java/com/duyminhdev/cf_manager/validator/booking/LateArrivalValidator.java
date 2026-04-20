@@ -3,10 +3,16 @@ package com.duyminhdev.cf_manager.validator.booking;
 import com.duyminhdev.cf_manager.enums.BookingValidationUseCase;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 
 @Component
 public class LateArrivalValidator extends AbstractBookingValidationRule {
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_04_12_LATE_ARRIVAL";
+    }
 
     @Override
     public int order() {
@@ -20,14 +26,14 @@ public class LateArrivalValidator extends AbstractBookingValidationRule {
 
     @Override
     public void validate(BookingValidationContext context) {
-        LocalDateTime arriveAt = context.resolveExpectedArriveTime();
+        Instant arriveAt = context.resolveExpectedArriveTime();
         if (arriveAt == null) {
-            fail("expectedArriveTime is required");
+            fail("Thời gian đến dự kiến (expectedArriveTime) không được để trống");
         }
 
-        LocalDateTime checkInAt = context.resolveCheckInOrNow();
-        if (checkInAt.isAfter(arriveAt.plusMinutes(30))) {
-            fail("late check-in over 30 minutes is not allowed; use no-show flow first");
+        Instant checkInAt = context.resolveCheckInOrNow();
+        if (checkInAt.isAfter(arriveAt.plus(Duration.ofMinutes(30)))) {
+            fail("Check-in trễ quá 30 phút không được phép; vui lòng thực hiện luồng no-show trước");
         }
     }
 }

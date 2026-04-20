@@ -22,8 +22,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 @Service
 @Slf4j
@@ -74,16 +74,16 @@ public class AuthServiceImpl implements AuthService {
                     new UsernamePasswordAuthenticationToken(username, rawPassword)
             );
         } catch (BadCredentialsException ex) {
-            throw new InvalidDataException("Invalid username or password");
+            throw new InvalidDataException("Tên đăng nhập hoặc mật khẩu không chính xác");
         } catch (DisabledException ex) {
-            throw new InvalidDataException("User account is disabled");
+            throw new InvalidDataException("Tài khoản đã bị vô hiệu hóa");
         }
 
         Account account = accountRepo.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản: " + username));
 
         if (account.getActive() == null || !account.getActive()) {
-            throw new DisabledException("User is not active");
+            throw new DisabledException("Tài khoản chưa được kích hoạt");
         }
 
         return issueTokens(account, "LOGIN_SUCCESSFULLY");
@@ -127,18 +127,21 @@ public class AuthServiceImpl implements AuthService {
          * 5. Phát hành token mới
          */
         AccountToken token = tokenRepo.findByRefreshTokenAndRevokedFalse(refreshToken)
-                .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
+                .orElseThrow(() -> new BadCredentialsException("Refresh token không hợp lệ hoặc đã bị thu hồi"));
 
         Account account = token.getAccount();
 
         if (account.getActive() == null || !account.getActive()) {
-            throw new DisabledException("User is not active");
+            throw new DisabledException("Tài khoản chưa được kích hoạt");
         }
 
         // Enforce refresh token TTL
-        LocalDateTime expAt = token.getRefreshTokenExpiresAt();
-        if (expAt == null || expAt.atZone(ZoneId.systemDefault()).toInstant().isBefore(Instant.now())) {
-            throw new BadCredentialsException("Refresh token expired");
+        Instant now = Instant.now();
+        Instant expAt = token.getRefreshTokenExpiresAt();
+        if (expAt == null || !expAt.isAfter(now)) {
+            token.setRevoked(true);
+            tokenRepo.save(token);
+            throw new BadCredentialsException("Refresh token đã hết hiệu lực");
         }
 
         // Revoke old token
@@ -161,7 +164,7 @@ public class AuthServiceImpl implements AuthService {
          * 3. Trả kết quả đăng xuất thành công
          */
         AccountToken token = tokenRepo.findByRefreshTokenAndRevokedFalse(refreshToken)
-                .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
+                .orElseThrow(() -> new BadCredentialsException("Refresh token không hợp lệ hoặc đã bị thu hồi"));
 
         // Revoke the token — this invalidates both refresh token and access token (JTI mismatch)
         token.setRevoked(true);
@@ -217,7 +220,7 @@ public class AuthServiceImpl implements AuthService {
         AccountToken newToken = AccountToken.builder()
                 .account(account)
                 .refreshToken(refreshToken)
-                .refreshTokenExpiresAt(LocalDateTime.ofInstant(refreshExpiresAt, ZoneId.systemDefault()))
+            .refreshTokenExpiresAt(refreshExpiresAt)
                 .accessTokenJti(jti)
                 .revoked(false)
                 .build();
@@ -229,13 +232,17 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .expiresInSeconds(jwtService.accessExpiresInSeconds())
                 .message(message)
+                .userInfo(AuthResponse.UserInfo.builder()
+                        .fullName(account.getFullName())
+                        .phoneNumber(account.getPhoneNumber())
+                        .build())
                 .build();
     }
 
     private Account buildAccount(String username, String rawPassword, String fullName, String roleCode) {
         // Look up by RoleCode (e.g. "ADMIN") matching actual DB values
         Role role = roleRepo.findByRoleCode(roleCode)
-                .orElseThrow(() -> new RuntimeException("Role not found with code: " + roleCode));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò với mã: " + roleCode));
 
         return Account.builder()
                 .username(username)
@@ -243,8 +250,8 @@ public class AuthServiceImpl implements AuthService {
                 .fullName(fullName)
                 .photo("images/userdefault.jpg")
                 .active(true)
-                .createdTime(LocalDateTime.now())
-                .dob(LocalDateTime.of(2000, 1, 1, 0, 0))
+            .createdTime(Instant.now())
+            .dob(LocalDate.of(2000, 1, 1).atStartOfDay().toInstant(ZoneOffset.UTC))
                 .role(role)
                 .build();
     }

@@ -7,7 +7,8 @@ import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -15,6 +16,11 @@ import java.util.List;
 public class EarlyArrivalValidator extends AbstractBookingValidationRule {
 
     private final TableBookingRepository tableBookingRepository;
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_10_EARLY_ARRIVAL";
+    }
 
     @Override
     public int order() {
@@ -28,22 +34,22 @@ public class EarlyArrivalValidator extends AbstractBookingValidationRule {
 
     @Override
     public void validate(BookingValidationContext context) {
-        LocalDateTime arriveAt = context.resolveExpectedArriveTime();
+        Instant arriveAt = context.resolveExpectedArriveTime();
         if (arriveAt == null) {
-            fail("expectedArriveTime is required");
+            fail("Thời gian đến dự kiến (expectedArriveTime) không được để trống");
         }
 
-        LocalDateTime checkInAt = context.resolveCheckInOrNow();
-        if (!checkInAt.isBefore(arriveAt.minusMinutes(30))) {
+        Instant checkInAt = context.resolveCheckInOrNow();
+        if (!checkInAt.isBefore(arriveAt.minus(Duration.ofMinutes(30)))) {
             return;
         }
 
         Integer tableId = context.resolveTableId();
         if (tableId == null) {
-            fail("tableId is required for early-arrival check");
+            fail("Mã bàn (tableId) là bắt buộc để kiểm tra check-in sớm");
         }
 
-        LocalDateTime recomputedCheckOut = checkInAt.plusMinutes(context.resolveSessionDurationMinutes());
+        Instant recomputedCheckOut = checkInAt.plus(Duration.ofMinutes(context.resolveSessionDurationMinutes()));
 
         Integer excludeBookingId = context.resolveBookingId();
         List<TableBooking> nextBookings = tableBookingRepository.findConfirmedBookingsFromTime(
@@ -57,15 +63,15 @@ public class EarlyArrivalValidator extends AbstractBookingValidationRule {
             return;
         }
 
-        LocalDateTime nextExpectedArrive = nextBookings.getFirst().getExpectedArriveTime();
+        Instant nextExpectedArrive = nextBookings.getFirst().getExpectedArriveTime();
         boolean hasConflict = nextExpectedArrive != null && !recomputedCheckOut.isBefore(nextExpectedArrive);
 
         if (hasConflict && !context.isForce()) {
-            fail("early check-in conflicts with next confirmed booking; force=true is required");
+            fail("Check-in sớm gây xung đột với đặt bàn kế tiếp; yêu cầu gửi kèm force=true để buộc xử lý");
         }
 
         if (hasConflict) {
-            warn(context, "early check-in accepted with force; next booking may be impacted");
+            warn(context, "Check-in sớm được chấp nhận với force; các đặt bàn tiếp theo có thể bị ảnh hưởng");
         }
     }
 }

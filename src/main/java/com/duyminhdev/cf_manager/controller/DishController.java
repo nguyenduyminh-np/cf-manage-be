@@ -5,6 +5,7 @@ import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.dish.DishListRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.dish.DishSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.dish.DishResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.DishService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/dish")
 @RequiredArgsConstructor
+@AdminOrManagerAccess
 public class DishController {
 
     private final DishService dishService;

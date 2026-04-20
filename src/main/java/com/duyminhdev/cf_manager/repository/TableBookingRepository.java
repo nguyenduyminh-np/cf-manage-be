@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -37,8 +37,8 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
     boolean existsUpcomingActiveBookingByTableIdAndStatuses(
             @Param("tableId") Integer tableId,
             @Param("statuses")Collection<String> statuses,
-            @Param("fromTime") LocalDateTime fromTime,
-            @Param("toTime") LocalDateTime toTime
+            @Param("fromTime") Instant fromTime,
+            @Param("toTime") Instant toTime
             );
 
     @Query("""
@@ -53,16 +53,16 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     boolean existsConflictBookingOnTable(
             @Param("tableId") Integer tableId,
-            @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime,
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime,
             @Param("statuses") Collection<String> statuses,
             @Param("excludeBookingId") Integer excludeBookingId
     );
 
     default boolean existsConflictBookingOnTable(
             Integer tableId,
-            LocalDateTime startTime,
-            LocalDateTime endTime,
+            Instant startTime,
+            Instant endTime,
             Collection<String> statuses
     ) {
         return existsConflictBookingOnTable(tableId, startTime, endTime, statuses, null);
@@ -80,8 +80,8 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     boolean existsActiveBookingOnTableInWindowAndStatuses(
             @Param("tableId") Integer tableId,
-            @Param("fromTime") LocalDateTime fromTime,
-            @Param("toTime") LocalDateTime toTime,
+            @Param("fromTime") Instant fromTime,
+            @Param("toTime") Instant toTime,
             @Param("statuses") Collection<String> statuses,
             @Param("excludeBookingId") Integer excludeBookingId
     );
@@ -97,9 +97,21 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     boolean existsActiveBookingOnTableFromTimeAndStatuses(
             @Param("tableId") Integer tableId,
-            @Param("fromTime") LocalDateTime fromTime,
+            @Param("fromTime") Instant fromTime,
             @Param("statuses") Collection<String> statuses,
             @Param("excludeBookingId") Integer excludeBookingId
+    );
+
+    @Query("""
+            select case when count(tb) > 0 then true else false end
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) in :statuses
+            """)
+    boolean existsActiveBookingOnTableByStatuses(
+            @Param("tableId") Integer tableId,
+            @Param("statuses") Collection<String> statuses
     );
 
     @Query("""
@@ -114,7 +126,7 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     List<TableBooking> findConfirmedBookingsFromTime(
             @Param("tableId") Integer tableId,
-            @Param("fromTime") LocalDateTime fromTime,
+            @Param("fromTime") Instant fromTime,
             @Param("status") String status,
             @Param("excludeBookingId") Integer excludeBookingId
     );
@@ -130,8 +142,8 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             order by tb.expectedArriveTime asc
             """)
     List<TableBooking> findConfirmedBookingsComingInWindow(
-            @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime
     );
 
     @Query(value = """
@@ -146,8 +158,8 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """, nativeQuery = true)
     List<TableBooking> findConfirmedBookingsOnTableBetween(
             @Param("tableId") Integer tableId,
-            @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime
     );
 
     @Query(value = """
@@ -162,10 +174,10 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """, nativeQuery = true)
     List<TableBooking> findNextConfirmedBookingOnTableInternal(
             @Param("tableId") Integer tableId,
-            @Param("afterTime") LocalDateTime afterTime
+            @Param("afterTime") Instant afterTime
     );
 
-    default Optional<TableBooking> findNextConfirmedBookingOnTable(Integer tableId, LocalDateTime afterTime) {
+    default Optional<TableBooking> findNextConfirmedBookingOnTable(Integer tableId, Instant afterTime) {
         return findNextConfirmedBookingOnTableInternal(tableId, afterTime).stream().findFirst();
     }
 
@@ -173,12 +185,12 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             select tb.*
             from table_booking tb
             where tb.is_active = 1
-              and upper(tb.booking_status) = upper('CONFIRMED')
+                                                        and upper(tb.booking_status) in (upper('CONFIRMED'), upper('PENDING_CONFIRMATION'))
               and tb.check_in_at is null
               and tb.expected_arrive_time < date_sub(:nowTime, interval 30 minute)
             order by tb.expected_arrive_time asc
             """, nativeQuery = true)
-    List<TableBooking> findConfirmedNoShowCandidates(@Param("nowTime") LocalDateTime nowTime);
+                List<TableBooking> findNoShowCandidatesForExpiration(@Param("nowTime") Instant nowTime);
 
     @Query(value = """
             select tb.*
@@ -197,7 +209,7 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             order by tb.check_in_at asc
             """, nativeQuery = true)
     List<TableBooking> findCheckedInWithoutOrderOlderThan(
-            @Param("nowTime") LocalDateTime nowTime,
+            @Param("nowTime") Instant nowTime,
             @Param("minutes") int minutes
     );
 
@@ -213,7 +225,7 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     List<TableBooking> findPendingConfirmationsOnTableAfter(
             @Param("tableId") Integer tableId,
-            @Param("fromTime") LocalDateTime fromTime
+            @Param("fromTime") Instant fromTime
     );
 
     @EntityGraph(attributePaths = {"table", "account"})
@@ -228,8 +240,8 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     List<TableBooking> findBookingsByStatusAndExpectedArriveWindow(
             @Param("status") String status,
-            @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime
     );
 
     @EntityGraph(attributePaths = {"table", "account"})
@@ -244,7 +256,7 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     List<TableBooking> findNoShowCandidates(
             @Param("status") String status,
-            @Param("cutoffTime") LocalDateTime cutoffTime
+            @Param("cutoffTime") Instant cutoffTime
     );
 
     @EntityGraph(attributePaths = {"table", "account"})
@@ -259,7 +271,7 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     List<TableBooking> findCheckedInByCheckInBefore(
             @Param("status") String status,
-            @Param("cutoffTime") LocalDateTime cutoffTime
+            @Param("cutoffTime") Instant cutoffTime
     );
 
     @EntityGraph(attributePaths = {"table", "account"})
@@ -274,7 +286,25 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             """)
     List<TableBooking> findByStatusAndExpectedCheckOutWindow(
             @Param("status") String status,
-            @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime
+    );
+
+    @EntityGraph(attributePaths = {"table", "account"})
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) in :statuses
+              and tb.expectedArriveTime < :endTime
+              and tb.expectedCheckOut > :startTime
+            order by tb.expectedArriveTime asc
+            """)
+    List<TableBooking> findActiveBookingsOnTableBetweenByStatuses(
+            @Param("tableId") Integer tableId,
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime,
+            @Param("statuses") Collection<String> statuses
     );
 }

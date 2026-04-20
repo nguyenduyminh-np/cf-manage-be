@@ -4,7 +4,9 @@ import jakarta.persistence.Tuple;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 public final class NativeSqlTupleUtils {
 
@@ -51,16 +53,22 @@ public final class NativeSqlTupleUtils {
         return Boolean.parseBoolean(value.toString());
     }
 
-    public static LocalDateTime getLocalDateTime(Tuple tuple, String alias) {
+    public static Instant getInstant(Tuple tuple, String alias) {
         Object value = tuple.get(alias);
         if (value == null) {
             return null;
         }
-        if (value instanceof LocalDateTime localDateTime) {
-            return localDateTime;
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toInstant();
+        }
+        if (value instanceof java.time.LocalDateTime localDateTime) {
+            return localDateTime.toInstant(ZoneOffset.UTC);
         }
         if (value instanceof Timestamp timestamp) {
-            return timestamp.toLocalDateTime();
+            return timestamp.toInstant();
         }
         return null;
     }

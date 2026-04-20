@@ -1,19 +1,28 @@
 package com.duyminhdev.cf_manager.service;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingAvailableSlotsRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCancelRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckInRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckOutRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingConfirmRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCreateRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingDetailRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingDepositRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingExtendRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingStatusUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
 
 import java.util.List;
 
 public interface TableBookingService {
+
+    // Tìm kiếm job
+    public List<TableBookingResponseDTO> getPendingAndConfirmedBookings(TableBookingSearchRequestDTO request);
 
     /**
      * Tìm kiếm lịch sử đặt bàn theo bộ lọc và phân trang.
@@ -26,6 +35,11 @@ public interface TableBookingService {
     TableBookingResponseDTO create(TableBookingCreateRequestDTO request);
 
     /**
+     * Lấy chi tiết đầy đủ của một booking theo id.
+     */
+    TableBookingResponseDTO detail(TableBookingDetailRequestDTO request);
+
+    /**
      * Cập nhật booking hiện có, hỗ trợ đổi bàn và đồng bộ trạng thái liên quan.
      */
     TableBookingResponseDTO update(TableBookingUpdateRequestDTO request);
@@ -35,17 +49,25 @@ public interface TableBookingService {
      */
     Boolean updateStatus(TableBookingStatusUpdateRequestDTO request);
 
-    TableBookingResponseDTO confirm(Integer bookingId);
+    TableBookingResponseDTO confirm(TableBookingConfirmRequestDTO request);
 
-    TableBookingResponseDTO checkIn(Integer bookingId, TableBookingCheckInRequestDTO request);
+    TableBookingResponseDTO checkIn(TableBookingCheckInRequestDTO request);
 
-    TableBookingResponseDTO checkOut(Integer bookingId, TableBookingCheckOutRequestDTO request);
+    TableBookingResponseDTO checkOut(TableBookingCheckOutRequestDTO request);
 
-    TableBookingResponseDTO cancel(Integer bookingId);
+    TableBookingResponseDTO cancel(TableBookingCancelRequestDTO request);
 
-    TableBookingResponseDTO extend(Integer bookingId, TableBookingExtendRequestDTO request);
+    TableBookingResponseDTO extend(TableBookingExtendRequestDTO request);
 
-    TableBookingResponseDTO createWalkIn(TableBookingCreateRequestDTO request, boolean force);
+    TableBookingResponseDTO createWalkIn(TableBookingWalkInRequestDTO request, boolean force);
 
-    TableBookingResponseDTO deposit(Integer bookingId, TableBookingDepositRequestDTO request);
+    TableBookingResponseDTO createWalkInFromLateArrival(
+            Integer lateBookingId,
+            TableBookingWalkInRequestDTO request,
+            boolean force
+    );
+
+    TableBookingResponseDTO deposit(TableBookingDepositRequestDTO request);
+
+    List<TableBookingAvailableSlotResponseDTO> getAvailableSlots(TableBookingAvailableSlotsRequestDTO request);
 }

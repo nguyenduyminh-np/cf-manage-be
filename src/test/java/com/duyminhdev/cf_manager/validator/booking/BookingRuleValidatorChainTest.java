@@ -3,7 +3,10 @@ package com.duyminhdev.cf_manager.validator.booking;
 import com.duyminhdev.cf_manager.enums.BookingValidationUseCase;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -23,13 +26,17 @@ class BookingRuleValidatorChainTest {
         BookingRuleValidatorChain chain = new BookingRuleValidatorChain(List.of(ruleA, ruleB, ruleC));
 
         BookingValidationContext context = BookingValidationContext.builder()
-                .now(LocalDateTime.of(2026, 4, 10, 10, 0))
+                .now(at(2026, 4, 10, 10, 0))
                 .warnings(new ArrayList<>())
                 .build();
 
         chain.validate(BookingValidationUseCase.CREATE_BOOKING, context);
 
         assertEquals(List.of("B", "A"), execution);
+    }
+
+    private static Instant at(int year, int month, int day, int hour, int minute) {
+        return java.time.LocalDateTime.of(year, month, day, hour, minute, 0).toInstant(java.time.ZoneOffset.UTC);
     }
 
     private static class FakeRule implements BookingValidationRule {

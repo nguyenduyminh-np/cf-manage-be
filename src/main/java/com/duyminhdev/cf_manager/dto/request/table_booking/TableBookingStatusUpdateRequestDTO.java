@@ -6,20 +6,23 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
 public class TableBookingStatusUpdateRequestDTO {
-    @NotNull(message = "bookingId is required")
-    @Positive(message = "bookingId must be > 0")
+    @NotNull(message = "Mã đặt bàn không được để trống")
+    @Positive(message = "Mã đặt bàn phải lớn hơn 0")
     private Integer bookingId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid bookingStatus code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái đặt bàn (bookingStatus) không hợp lệ")
     private String bookingStatus;
 
-    private LocalDateTime checkInAt;
+  //  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant checkInAt;
 
-    private LocalDateTime checkOutAt;
+ //   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant checkOutAt;
 }

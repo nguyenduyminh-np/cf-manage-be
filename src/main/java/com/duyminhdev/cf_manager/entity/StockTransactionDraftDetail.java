@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "stock_transaction_draft_detail", indexes = {
@@ -25,7 +25,7 @@ public class StockTransactionDraftDetail {
     private BigDecimal unitPrice;
 
     @Column(name = "expiration_at", nullable = false)
-    private LocalDateTime expirationDate;
+    private Instant expirationDate;
 
     @Column(name = "note", length = 500)
     private String note;
@@ -35,7 +35,7 @@ public class StockTransactionDraftDetail {
     private Boolean createNewBatch = false;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     // VIRTUAL FK: Không có constraint khóa ngoại vật lý trong file SQL
     @ManyToOne(fetch = FetchType.LAZY)

@@ -8,10 +8,10 @@ import lombok.Data;
 
 @Data
 public class TableStatusUpdateRequestDTO {
-    @NotNull(message = "tableId is required")
-    @Positive(message = "tableId must be > 0")
+    @NotNull(message = "Mã bàn (tableId) không được để trống")
+    @Positive(message = "Mã bàn (tableId) phải lớn hơn 0")
     private Integer tableId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid tableStatus code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái bàn (tableStatus) không hợp lệ")
     private String tableStatus;
 }

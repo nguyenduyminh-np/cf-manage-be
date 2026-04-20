@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +33,8 @@ public class BookingSchedulerService {
 
     @Transactional
     public void reserveTablesForUpcomingConfirmedBookings() {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime reserveWindowEnd = now.plusMinutes(BookingSchedulerConstant.RESERVE_WINDOW_MINUTES);
+        Instant now = Instant.now();
+        Instant reserveWindowEnd = now.plus(Duration.ofMinutes(BookingSchedulerConstant.RESERVE_WINDOW_MINUTES));
 
         List<TableBooking> upcoming = tableBookingRepository.findConfirmedBookingsComingInWindow(
                 now,
@@ -54,7 +54,7 @@ public class BookingSchedulerService {
                         return;
                     }
 
-                    LocalDateTime expectedArrive = current.getExpectedArriveTime();
+                    Instant expectedArrive = current.getExpectedArriveTime();
                     if (expectedArrive == null || !expectedArrive.isAfter(now) || expectedArrive.isAfter(reserveWindowEnd)) {
                         return;
                     }
@@ -92,8 +92,8 @@ public class BookingSchedulerService {
 
     @Transactional
     public void expireNoShowBookings() {
-        LocalDateTime now = LocalDateTime.now();
-        List<TableBooking> noShowCandidates = tableBookingRepository.findConfirmedNoShowCandidates(now);
+        Instant now = Instant.now();
+        List<TableBooking> noShowCandidates = tableBookingRepository.findNoShowCandidatesForExpiration(now);
 
         for (TableBooking candidate : noShowCandidates) {
             Integer bookingId = candidate.getId();
@@ -122,8 +122,8 @@ public class BookingSchedulerService {
     }
 
     public void notifyOccupiedTableConflicts() {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime reserveWindowEnd = now.plusMinutes(BookingSchedulerConstant.RESERVE_WINDOW_MINUTES);
+        Instant now = Instant.now();
+        Instant reserveWindowEnd = now.plus(Duration.ofMinutes(BookingSchedulerConstant.RESERVE_WINDOW_MINUTES));
 
         List<TableBooking> upcoming = tableBookingRepository.findConfirmedBookingsComingInWindow(
                 now,
@@ -157,7 +157,7 @@ public class BookingSchedulerService {
 
     @Transactional
     public void processNoOrderTimeoutFlow() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         List<TableBooking> checkedInCandidates = tableBookingRepository.findCheckedInWithoutOrderOlderThan(
             now,
             (int) BookingSchedulerConstant.NO_ORDER_WARNING_MINUTES
@@ -166,7 +166,7 @@ public class BookingSchedulerService {
         for (TableBooking booking : checkedInCandidates) {
             Integer bookingId = booking.getId();
             Integer tableId = resolveTableId(booking);
-            LocalDateTime checkInAt = booking.getCheckInAt();
+            Instant checkInAt = booking.getCheckInAt();
             if (bookingId == null || tableId == null || checkInAt == null) {
                 continue;
             }
@@ -206,8 +206,8 @@ public class BookingSchedulerService {
     }
 
     public void notifyBeforeExpectedCheckout() {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime reminderWindowEnd = now.plusMinutes(BookingSchedulerConstant.CHECKOUT_REMINDER_MINUTES);
+        Instant now = Instant.now();
+        Instant reminderWindowEnd = now.plus(Duration.ofMinutes(BookingSchedulerConstant.CHECKOUT_REMINDER_MINUTES));
 
         List<TableBooking> aboutToCheckout = tableBookingRepository.findByStatusAndExpectedCheckOutWindow(
                 BookingStatusEnum.CHECKED_IN.getCode(),
@@ -256,7 +256,7 @@ public class BookingSchedulerService {
             payload.put("tableCode", booking.getTable() != null ? booking.getTable().getTableCode() : null);
         }
 
-        payload.put("at", LocalDateTime.now());
+        payload.put("at", Instant.now());
         return payload;
     }
 }

@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.dto.response.dish_category;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -16,6 +16,6 @@ public class DishCategoryResponseDTO {
     private String dishCategoryName;
 
     private Boolean active;
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 }
 

@@ -24,8 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -95,7 +96,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setAccount(currentAccount);
         invoice.setPaymentStatus(paymentStatus);
         invoice.setPaymentMethod(request.getPaymentMethod());
-        invoice.setCreatedTime(LocalDateTime.now());
+        invoice.setCreatedTime(Instant.now());
         invoice.setActive(true);
 
         Invoice savedInvoice = invoiceRepository.save(invoice);
@@ -134,7 +135,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         Invoice invoice = invoiceRepository.findByIdAndActiveTrue(request.getInvoiceId())
                 .orElseThrow(() -> new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
-                        "Invoice not found with id: " + request.getInvoiceId()
+                        "Không tìm thấy hóa đơn với id: " + request.getInvoiceId()
                 ));
 
         invoice.setPaymentStatus(request.getPaymentStatus());
@@ -161,7 +162,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         List<InvoiceDetailNativeResultDTO> rows = nativeSqlInvoiceRepository.findInvoiceDetailByInvoiceId(request.getInvoiceId());
         if (rows == null || rows.isEmpty()) {
             throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
-                    "Invoice detail not found with invoiceId: " + request.getInvoiceId()
+                    "Không tìm thấy chi tiết hóa đơn với invoiceId: " + request.getInvoiceId()
             );
         }
 
@@ -181,7 +182,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     private void validateInvoiceTotal(Integer tableId, BigDecimal requestTotalMoney) {
         if (requestTotalMoney == null || requestTotalMoney.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException("totalMoney must be > 0");
+            throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException("Tổng tiền hóa đơn (totalMoney) phải lớn hơn 0");
         }
 
         /**
@@ -198,7 +199,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         if (calculatedTotal.compareTo(requestTotalMoney) != 0) {
             throw new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
-                    "Invoice totalMoney does not match aggregated dish total of table"
+                    "Tổng tiền trong yêu cầu không khớp với tổng giá trị các món ăn đã gọi của bàn"
             );
         }
     }
@@ -212,7 +213,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
                     detail.setInvoice(invoice);
                     detail.setDish(dish);
-                    detail.setCreatedTime(LocalDateTime.now());
+                    detail.setCreatedTime(Instant.now());
                     detail.setActive(true);
                     return detail;
                 })
@@ -249,8 +250,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     private long countInvoicesToday() {
-        LocalDateTime start = LocalDate.now().atStartOfDay();
-        LocalDateTime end = start.plusDays(1).minusNanos(1);
+        Instant start = LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant end = start.plusSeconds(86_400L).minusNanos(1);
         return invoiceRepository.countByCreatedTimeBetweenAndActiveTrue(start, end);
     }
 

@@ -3,6 +3,7 @@ package com.duyminhdev.cf_manager.controller;
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.request.payment_method.PaymentMethodListRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.payment_method.PaymentMethodResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.PaymentMethodService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/payment-method")
 @RequiredArgsConstructor
+@AdminOrManagerAccess
 public class PaymentMethodController {
 
     private final PaymentMethodService paymentMethodService;

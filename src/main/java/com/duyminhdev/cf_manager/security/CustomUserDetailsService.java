@@ -37,6 +37,14 @@ public class CustomUserDetailsService implements UserDetailsService {
             throw new UsernameNotFoundException("User inactive");
         }
 
+        if (account.getRole() == null || account.getRole().getRoleCode() == null || account.getRole().getRoleCode().isBlank()) {
+            throw new UsernameNotFoundException("User role is missing");
+        }
+
+        if (!Boolean.TRUE.equals(account.getRole().getActive())) {
+            throw new UsernameNotFoundException("User role is inactive");
+        }
+
         // Load the active (non-revoked) token's JTI for JTI comparison in the filter
         String activeJti = tokenRepo.findByAccountAndRevokedFalse(account)
                 .map(AccountToken::getAccessTokenJti)

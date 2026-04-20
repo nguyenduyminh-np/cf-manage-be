@@ -4,7 +4,7 @@ import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCreateReq
 import com.duyminhdev.cf_manager.entity.TableBooking;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public interface BookingUseCaseService {
 
@@ -12,21 +12,21 @@ public interface BookingUseCaseService {
 
     TableBooking confirmBooking(Integer bookingId);
 
-    TableBooking checkIn(Integer bookingId, LocalDateTime requestedCheckInAt, boolean force);
+    TableBooking checkIn(Integer bookingId, Instant requestedCheckInAt, boolean force);
 
-    TableBooking checkOut(Integer bookingId, LocalDateTime requestedCheckOutAt);
+    TableBooking checkOut(Integer bookingId, Instant requestedCheckOutAt);
 
     TableBooking cancelBooking(Integer bookingId);
 
     TableBooking expireBooking(Integer bookingId);
 
-    TableBooking extendBooking(Integer bookingId, LocalDateTime newExpectedCheckOut, boolean force);
+    TableBooking extendBooking(Integer bookingId, Instant newExpectedCheckOut, boolean force);
 
     TableBooking createWalkIn(TableBookingCreateRequestDTO request, boolean force);
 
     TableBooking createWalkInFromLateArrival(Integer lateBookingId, TableBookingCreateRequestDTO walkInRequest, boolean force);
 
-    TableBooking cancelBookingNoOrderTimeout(Integer bookingId, LocalDateTime now);
+    TableBooking cancelBookingNoOrderTimeout(Integer bookingId, Instant now);
 
-    TableBooking markDepositPaid(Integer bookingId, BigDecimal depositAmount, String depositTxnRef, LocalDateTime paidAt);
+    TableBooking markDepositPaid(Integer bookingId, BigDecimal depositAmount, String depositTxnRef, Instant paidAt);
 }

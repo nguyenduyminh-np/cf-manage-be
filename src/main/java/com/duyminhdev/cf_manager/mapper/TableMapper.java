@@ -1,8 +1,10 @@
 package com.duyminhdev.cf_manager.mapper;
 
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableAvailableNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableAvailableResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableDetailResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableSearchResponseDTO;
-import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.entity.TableEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -16,5 +18,7 @@ public interface TableMapper {
 
     @Mapping(target = "tableStatusName", source = "tableStatus", qualifiedByName = "toTableStatusName")
     TableSearchResponseDTO toSearchResponseDTO(TableSearchNativeResultDTO source);
+
+    TableAvailableResponseDTO toAvailableResponseDTO(TableAvailableNativeResultDTO source);
 }
 

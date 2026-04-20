@@ -11,10 +11,10 @@ import lombok.Setter;
 @Getter
 @Setter
 public class DishOrderStatusUpdateRequestDTO {
-    @NotNull(message = "dishOrderId is required")
-    @Positive(message = "dishOrderId must be > 0")
+    @NotNull(message = "Mã đơn gọi món không được để trống")
+    @Positive(message = "Mã đơn gọi món phải lớn hơn 0")
     private Integer dishOrderId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid dishOrderStatus code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái đơn gọi món không hợp lệ")
     private String dishOrderStatus;
 }

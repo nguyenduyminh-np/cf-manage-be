@@ -11,11 +11,11 @@ import lombok.Setter;
 @Setter
 public class InvoiceConfirmPaymentRequestDTO {
 
-    @NotNull(message = "invoiceId is required")
-    @Positive(message = "invoiceId must be > 0")
+    @NotNull(message = "Mã hóa đơn không được để trống")
+    @Positive(message = "Mã hóa đơn phải lớn hơn 0")
     private Integer invoiceId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid paymentStatus code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái thanh toán không hợp lệ")
     private String paymentStatus;
 }
 

@@ -13,24 +13,24 @@ import java.util.List;
 @Setter
 public class InvoiceCreateRequestDTO {
 
-    @NotNull(message = "tableId is required")
-    @Positive(message = "tableId must be > 0")
+    @NotNull(message = "Mã bàn không được để trống")
+    @Positive(message = "Mã bàn phải lớn hơn 0")
     private Integer tableId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid paymentMethod code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã phương thức thanh toán không hợp lệ")
     private String paymentMethod;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid paymentStatus code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái thanh toán không hợp lệ")
     private String paymentStatus;
 
-    @NotNull(message = "totalMoney is required")
-    @DecimalMin(value = "0", inclusive = false, message = "totalMoney must be > 0")
+    @NotNull(message = "Tổng tiền hóa đơn không được để trống")
+    @DecimalMin(value = "0", inclusive = false, message = "Tổng tiền hóa đơn phải lớn hơn 0")
     private BigDecimal totalMoney;
 
-    @Positive(message = "guestCount must be > 0")
+    @Positive(message = "Số lượng khách phải lớn hơn 0")
     private Integer guestCount = 1;
 
-    @NotEmpty(message = "invoiceDetails must not be empty")
+    @NotEmpty(message = "Danh sách chi tiết hóa đơn không được để rỗng")
     @Valid
     private List<InvoiceDetailPayloadDTO> invoiceDetails;
 }

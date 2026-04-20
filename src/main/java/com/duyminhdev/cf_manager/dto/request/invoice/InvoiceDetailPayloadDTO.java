@@ -12,19 +12,19 @@ import java.math.BigDecimal;
 @Setter
 public class InvoiceDetailPayloadDTO {
 
-    @Positive(message = "invoiceDetailId must be > 0")
+    @Positive(message = "Mã chi tiết hóa đơn phải lớn hơn 0")
     private Integer invoiceDetailId;
 
-    @NotNull(message = "dishId is required")
-    @Positive(message = "dishId must be > 0")
+    @NotNull(message = "Mã món ăn không được để trống")
+    @Positive(message = "Mã món ăn phải lớn hơn 0")
     private Integer dishId;
 
-    @NotNull(message = "quantity is required")
-    @Positive(message = "quantity must be > 0")
+    @NotNull(message = "Số lượng không được để trống")
+    @Positive(message = "Số lượng phải lớn hơn 0")
     private Integer quantity;
 
-    @NotNull(message = "unitPrice is required")
-    @DecimalMin(value = "0", inclusive = false, message = "unitPrice must be > 0")
+    @NotNull(message = "Giá đơn vị không được để trống")
+    @DecimalMin(value = "0", inclusive = false, message = "Giá đơn vị phải lớn hơn 0")
     private BigDecimal unitPrice;
 }
 

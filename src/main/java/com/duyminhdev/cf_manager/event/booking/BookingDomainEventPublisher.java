@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -17,7 +17,7 @@ public class BookingDomainEventPublisher {
                 .mutationType(mutationType)
                 .bookingId(bookingId)
                 .tableId(tableId)
-                .occurredAt(LocalDateTime.now())
+            .occurredAt(Instant.now())
                 .build();
 
         applicationEventPublisher.publishEvent(event);

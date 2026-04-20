@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "role")
@@ -19,7 +19,7 @@ public class Role {
     private String roleName;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     // Trong DB là Active tinyint(1) DEFAULT NULL -> Không có default, nullable
     @Column(name = "is_active")

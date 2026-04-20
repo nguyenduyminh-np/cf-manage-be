@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.dto.response.table;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -22,7 +22,7 @@ public class TableSearchResponseDTO {
     private Integer slot;
 
     private Integer totalBooking;
-    private LocalDateTime lastBookingTime;
+    private Instant lastBookingTime;
 
     private Boolean active;
 }

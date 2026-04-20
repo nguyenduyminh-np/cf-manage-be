@@ -3,6 +3,7 @@ package com.duyminhdev.cf_manager.controller;
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.request.dish_category.DishCategoryListRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_category.DishCategoryResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.DishCategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/dish-category")
 @RequiredArgsConstructor
+@AdminOrManagerAccess
 public class DishCategoryController {
 
     private final DishCategoryService dishCategoryService;

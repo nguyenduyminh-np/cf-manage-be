@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "stock_level")
@@ -17,17 +17,17 @@ public class StockLevel {
     private Integer quantity;
 
     @Column(name = "expiration_at", nullable = false)
-    private LocalDateTime expirationDate;
+    private Instant expirationDate;
 
     @Column(name = "unit_price", nullable = false, precision = 18, scale = 0)
     private BigDecimal unitPrice;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @Builder.Default
     @Column(name = "updated_at", nullable = false, columnDefinition = "datetime DEFAULT CURRENT_TIMESTAMP")
-    private LocalDateTime lastUpdatedTime = LocalDateTime.now();
+    private Instant lastUpdatedTime = Instant.now();
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")

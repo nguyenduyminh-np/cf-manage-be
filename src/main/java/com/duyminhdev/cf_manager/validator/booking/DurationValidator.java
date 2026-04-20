@@ -3,10 +3,16 @@ package com.duyminhdev.cf_manager.validator.booking;
 import com.duyminhdev.cf_manager.enums.BookingValidationUseCase;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 
 @Component
 public class DurationValidator extends AbstractBookingValidationRule {
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_01_DURATION";
+    }
 
     @Override
     public int order() {
@@ -20,19 +26,19 @@ public class DurationValidator extends AbstractBookingValidationRule {
 
     @Override
     public void validate(BookingValidationContext context) {
-        LocalDateTime arriveAt = context.resolveExpectedArriveTime();
-        LocalDateTime checkOutAt = context.resolveExpectedCheckOut();
+        Instant arriveAt = context.resolveExpectedArriveTime();
+        Instant checkOutAt = context.resolveExpectedCheckOut();
 
         if (arriveAt == null) {
-            fail("expectedArriveTime is required");
+            fail("Thời gian đến dự kiến (expectedArriveTime) không được để trống");
         }
 
         if (checkOutAt == null) {
-            fail("expectedCheckOut is required");
+            fail("Thời gian trả bàn dự kiến (expectedCheckOut) không được để trống");
         }
 
         if (!checkOutAt.isAfter(arriveAt)) {
-            fail("expectedCheckOut must be greater than expectedArriveTime");
+            fail("Thời gian trả bàn phải sau thời gian đến");
         }
     }
 }

@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "invoice_detail")
@@ -20,7 +20,7 @@ public class InvoiceDetail {
     private BigDecimal unitPrice;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     // Bảng này trong DB KHÔNG có DEFAULT 1
     @Column(name = "is_active", nullable = false)

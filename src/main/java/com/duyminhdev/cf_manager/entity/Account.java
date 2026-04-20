@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "account")
@@ -33,13 +33,13 @@ public class Account {
     private String photo;
 
     @Column(name = "date_of_birth", nullable = false)
-    private LocalDateTime dob;
+    private Instant dob;
 
     @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false)

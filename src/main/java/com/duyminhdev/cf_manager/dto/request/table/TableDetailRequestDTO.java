@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 public class TableDetailRequestDTO {
-    @NotNull(message = "tableId is required")
-    @Positive(message = "Invalid range")
+    @NotNull(message = "Mã bàn không được để trống")
+    @Positive(message = "Mã bàn không hợp lệ")
     private Integer tableId;
 }

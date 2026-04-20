@@ -14,7 +14,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -57,9 +60,9 @@ class BookingSchedulerServiceTest {
                 }).when(bookingLockService).runWithTableLock(anyInt(), any(Runnable.class));
 
         TableBooking booking = booking(10, 3, BookingStatusEnum.CONFIRMED, TableStatusEnum.AVAILABLE,
-                LocalDateTime.now().plusMinutes(20), LocalDateTime.now().plusHours(2), LocalDateTime.now().minusMinutes(1));
+                Instant.now().plus(Duration.ofMinutes(20)), Instant.now().plus(Duration.ofHours(2)), Instant.now().minus(Duration.ofMinutes(1)));
 
-        when(tableBookingRepository.findConfirmedBookingsComingInWindow(any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(tableBookingRepository.findConfirmedBookingsComingInWindow(any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(booking));
         when(tableBookingRepository.findByIdAndActiveTrue(10)).thenReturn(Optional.of(booking));
         when(tableRepository.findByIdAndActiveTrue(3)).thenReturn(Optional.of(booking.getTable()));
@@ -80,11 +83,11 @@ class BookingSchedulerServiceTest {
     @Test
     void shouldExpireNoShowBookingUsingUseCaseService() {
         TableBooking candidate = booking(19, 5, BookingStatusEnum.CONFIRMED, TableStatusEnum.BOOKED,
-                LocalDateTime.now().minusMinutes(50), LocalDateTime.now().plusMinutes(20), null);
+                Instant.now().minus(Duration.ofMinutes(50)), Instant.now().plus(Duration.ofMinutes(20)), null);
         TableBooking expired = booking(19, 5, BookingStatusEnum.EXPIRED, TableStatusEnum.AVAILABLE,
                 candidate.getExpectedArriveTime(), candidate.getExpectedCheckOut(), null);
 
-        when(tableBookingRepository.findConfirmedNoShowCandidates(any(LocalDateTime.class)))
+        when(tableBookingRepository.findNoShowCandidatesForExpiration(any(Instant.class)))
                 .thenReturn(List.of(candidate));
         when(bookingUseCaseService.expireBooking(19)).thenReturn(expired);
 
@@ -101,9 +104,9 @@ class BookingSchedulerServiceTest {
     @Test
     void shouldWarnAfterTenMinutesWithoutOrder() {
         TableBooking checkedIn = booking(41, 7, BookingStatusEnum.CHECKED_IN, TableStatusEnum.OCCUPIED,
-                LocalDateTime.now().minusMinutes(40), LocalDateTime.now().plusMinutes(30), LocalDateTime.now().minusMinutes(11));
+                Instant.now().minus(Duration.ofMinutes(40)), Instant.now().plus(Duration.ofMinutes(30)), Instant.now().minus(Duration.ofMinutes(11)));
 
-        when(tableBookingRepository.findCheckedInWithoutOrderOlderThan(any(LocalDateTime.class), anyInt()))
+        when(tableBookingRepository.findCheckedInWithoutOrderOlderThan(any(Instant.class), anyInt()))
                 .thenReturn(List.of(checkedIn));
 
         bookingSchedulerService.processNoOrderTimeoutFlow();
@@ -113,23 +116,23 @@ class BookingSchedulerServiceTest {
                 anyString(),
                 any()
         );
-        verify(bookingUseCaseService, never()).cancelBookingNoOrderTimeout(anyInt(), any(LocalDateTime.class));
+        verify(bookingUseCaseService, never()).cancelBookingNoOrderTimeout(anyInt(), any(Instant.class));
     }
 
     @Test
     void shouldAutoCancelAfterTwentyMinutesWithoutOrder() {
         TableBooking checkedIn = booking(42, 8, BookingStatusEnum.CHECKED_IN, TableStatusEnum.OCCUPIED,
-                LocalDateTime.now().minusMinutes(60), LocalDateTime.now().plusMinutes(20), LocalDateTime.now().minusMinutes(25));
+                Instant.now().minus(Duration.ofMinutes(60)), Instant.now().plus(Duration.ofMinutes(20)), Instant.now().minus(Duration.ofMinutes(25)));
         TableBooking cancelled = booking(42, 8, BookingStatusEnum.CANCELLED, TableStatusEnum.AVAILABLE,
                 checkedIn.getExpectedArriveTime(), checkedIn.getExpectedCheckOut(), checkedIn.getCheckInAt());
 
-        when(tableBookingRepository.findCheckedInWithoutOrderOlderThan(any(LocalDateTime.class), anyInt()))
+        when(tableBookingRepository.findCheckedInWithoutOrderOlderThan(any(Instant.class), anyInt()))
                 .thenReturn(List.of(checkedIn));
-        when(bookingUseCaseService.cancelBookingNoOrderTimeout(anyInt(), any(LocalDateTime.class))).thenReturn(cancelled);
+        when(bookingUseCaseService.cancelBookingNoOrderTimeout(anyInt(), any(Instant.class))).thenReturn(cancelled);
 
         bookingSchedulerService.processNoOrderTimeoutFlow();
 
-        verify(bookingUseCaseService).cancelBookingNoOrderTimeout(anyInt(), any(LocalDateTime.class));
+        verify(bookingUseCaseService).cancelBookingNoOrderTimeout(anyInt(), any(Instant.class));
         verify(bookingNotificationService).sendOnce(
                 anyString(),
                 anyString(),
@@ -142,9 +145,9 @@ class BookingSchedulerServiceTest {
             Integer tableId,
             BookingStatusEnum status,
             TableStatusEnum tableStatus,
-            LocalDateTime expectedArrive,
-            LocalDateTime expectedCheckout,
-            LocalDateTime checkInAt
+            Instant expectedArrive,
+            Instant expectedCheckout,
+            Instant checkInAt
     ) {
         TableEntity table = TableEntity.builder()
                 .id(tableId)
@@ -162,5 +165,9 @@ class BookingSchedulerServiceTest {
                 .expectedCheckOut(expectedCheckout)
                 .checkInAt(checkInAt)
                 .build();
+    }
+
+    private static Instant at(int year, int month, int day, int hour, int minute) {
+        return java.time.LocalDateTime.of(year, month, day, hour, minute, 0).toInstant(java.time.ZoneOffset.UTC);
     }
 }

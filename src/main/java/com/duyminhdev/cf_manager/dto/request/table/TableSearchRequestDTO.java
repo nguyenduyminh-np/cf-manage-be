@@ -13,12 +13,12 @@ import lombok.Setter;
 public class TableSearchRequestDTO extends PageFilterRequest {
     private String keyword;
 
-    @Min(value = 1, message = "floor must be >= 1")
-    @Max(value= 100, message = "invalid floor range")
+    @Min(value = 1, message = "Số tầng phải từ 1 trở lên")
+    @Max(value= 100, message = "Số tầng vượt quá giới hạn cho phép")
     private Integer floor;
 
-    @Min(value = 1, message = "slot must be >= 1")
-    @Max(value = 1000, message = "slot must be <= 1000")
+    @Min(value = 1, message = "Số chỗ phải từ 1 trở lên")
+    @Max(value = 1000, message = "Số chỗ không được vượt quá 1000")
     private Integer slot;
 
   //  @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid tableStatus code")

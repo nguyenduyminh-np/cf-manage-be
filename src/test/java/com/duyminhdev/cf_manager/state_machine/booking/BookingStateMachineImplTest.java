@@ -19,7 +19,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -93,6 +94,7 @@ class BookingStateMachineImplTest {
         );
 
         assertTrue(ex.getMessage().startsWith("BOOKING_TRANSITION_NOT_ALLOWED"));
+        assertTrue(ex.getMessage().contains("[STATE_MACHINE_TRANSITION][BookingStateMachineImpl]"));
     }
 
     @Test
@@ -136,6 +138,7 @@ class BookingStateMachineImplTest {
         );
 
         assertTrue(ex.getMessage().startsWith("BOOKING_TRANSITION_GUARD_FAILED"));
+        assertTrue(ex.getMessage().contains("[STATE_MACHINE_GUARD][BookingStateMachineImpl]"));
     }
 
     @Test
@@ -186,30 +189,31 @@ class BookingStateMachineImplTest {
                 .table(table)
                 .active(true)
                 .bookingStatus(status.getCode())
-                .expectedArriveTime(LocalDateTime.now().plusMinutes(45))
-                .expectedCheckOut(LocalDateTime.now().plusHours(2))
+                .expectedArriveTime(Instant.now().plus(Duration.ofMinutes(45)))
+                .expectedCheckOut(Instant.now().plus(Duration.ofHours(2)))
                 .build();
     }
 
     private void adaptBookingForTransition(TableBooking booking, BookingStatusEnum from, BookingStatusEnum to) {
         if (from == BookingStatusEnum.CHECKED_IN) {
-            booking.setCheckInAt(LocalDateTime.now().minusMinutes(5));
+            booking.setCheckInAt(Instant.now().minus(Duration.ofMinutes(5)));
         }
 
-        if (from == BookingStatusEnum.CONFIRMED && to == BookingStatusEnum.EXPIRED) {
-            booking.setExpectedArriveTime(LocalDateTime.now().minusMinutes(31));
-            booking.setExpectedCheckOut(LocalDateTime.now().plusMinutes(89));
+        if ((from == BookingStatusEnum.PENDING || from == BookingStatusEnum.CONFIRMED)
+            && to == BookingStatusEnum.EXPIRED) {
+            booking.setExpectedArriveTime(Instant.now().minus(Duration.ofMinutes(31)));
+            booking.setExpectedCheckOut(Instant.now().plus(Duration.ofMinutes(89)));
             booking.setCheckInAt(null);
         }
 
         if (from == BookingStatusEnum.CONFIRMED && to == BookingStatusEnum.CHECKED_IN) {
-            booking.setExpectedArriveTime(LocalDateTime.now());
-            booking.setExpectedCheckOut(LocalDateTime.now().plusHours(2));
+            booking.setExpectedArriveTime(Instant.now());
+            booking.setExpectedCheckOut(Instant.now().plus(Duration.ofHours(2)));
         }
 
         if ((from == BookingStatusEnum.PENDING || from == BookingStatusEnum.CONFIRMED)
                 && to == BookingStatusEnum.CANCELLED) {
-            booking.setExpectedArriveTime(LocalDateTime.now().plusMinutes(20));
+            booking.setExpectedArriveTime(Instant.now().plus(Duration.ofMinutes(20)));
         }
     }
 
@@ -217,6 +221,7 @@ class BookingStateMachineImplTest {
         return Stream.of(
                 Arguments.of(BookingStatusEnum.PENDING, BookingStatusEnum.CONFIRMED),
                 Arguments.of(BookingStatusEnum.PENDING, BookingStatusEnum.CANCELLED),
+                Arguments.of(BookingStatusEnum.PENDING, BookingStatusEnum.EXPIRED),
                 Arguments.of(BookingStatusEnum.CONFIRMED, BookingStatusEnum.CHECKED_IN),
                 Arguments.of(BookingStatusEnum.CONFIRMED, BookingStatusEnum.CANCELLED),
                 Arguments.of(BookingStatusEnum.CONFIRMED, BookingStatusEnum.EXPIRED),

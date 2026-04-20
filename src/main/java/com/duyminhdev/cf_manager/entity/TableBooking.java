@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "table_booking")
@@ -14,16 +14,16 @@ public class TableBooking {
     private Integer id;
 
     @Column(name = "expected_arrive_time", nullable = false)
-    private LocalDateTime expectedArriveTime;
+    private Instant expectedArriveTime;
 
     @Column(name = "check_in_at")
-    private LocalDateTime checkInAt;
+    private Instant checkInAt;
 
     @Column(name = "expected_check_out")
-    private LocalDateTime expectedCheckOut;
+    private Instant expectedCheckOut;
 
     @Column(name = "check_out_at")
-    private LocalDateTime checkOutAt;
+    private Instant checkOutAt;
 
     @Column(name = "booking_status", nullable = false, length = 255)
     private String bookingStatus;
@@ -36,7 +36,7 @@ public class TableBooking {
     private Boolean depositPaid = false;
 
     @Column(name = "deposit_paid_at")
-    private LocalDateTime depositPaidAt;
+    private Instant depositPaidAt;
 
     @Builder.Default
     @Column(name = "is_deposit_forfeited", nullable = false, columnDefinition = "tinyint(1) DEFAULT 0")
@@ -46,7 +46,7 @@ public class TableBooking {
     private String depositTxnRef;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")

@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.dto.db_result.native_sql;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -28,7 +28,7 @@ public class InvoiceDetailNativeResultDTO {
 
     private Integer guestCount;
     private BigDecimal totalMoney;
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     private Integer invoiceDetailId;
     private Integer dishId;

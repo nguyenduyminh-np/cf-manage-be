@@ -5,7 +5,7 @@ import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Builder
@@ -13,8 +13,8 @@ public class BookingTransitionContext {
 
     private final TableBooking booking;
     private final BookingStatusEnum targetStatus;
-    private final LocalDateTime requestedCheckInAt;
-    private final LocalDateTime requestedCheckOutAt;
+    private final Instant requestedCheckInAt;
+    private final Instant requestedCheckOutAt;
 
     @Builder.Default
     private final boolean force = false;

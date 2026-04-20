@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -75,7 +75,7 @@ public class DishOrderServiceImpl implements DishOrderService {
                 .table(table)
                 .account(currentAccount)
                 .status(dishOrderStatus)
-                .createdTime(LocalDateTime.now())
+            .createdTime(Instant.now())
                 .active(true)
                 .build();
 
@@ -186,7 +186,7 @@ public class DishOrderServiceImpl implements DishOrderService {
                     detail.setDishOrder(order);
                     detail.setDish(dish);
                     detail.setPrice(dish.getPrice());
-                    detail.setCreatedTime(LocalDateTime.now());
+                    detail.setCreatedTime(Instant.now());
                     detail.setActive(true);
                     return detail;
                 })

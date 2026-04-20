@@ -3,10 +3,15 @@ package com.duyminhdev.cf_manager.validator.booking;
 import com.duyminhdev.cf_manager.enums.BookingValidationUseCase;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Component
 public class AdvanceBookingValidator extends AbstractBookingValidationRule {
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_01_ADVANCE_BOOKING";
+    }
 
     @Override
     public int order() {
@@ -20,14 +25,15 @@ public class AdvanceBookingValidator extends AbstractBookingValidationRule {
 
     @Override
     public void validate(BookingValidationContext context) {
-        LocalDateTime arriveAt = context.resolveExpectedArriveTime();
+        Instant arriveAt = context.resolveExpectedArriveTime();
         if (arriveAt == null) {
-            fail("expectedArriveTime is required");
+            fail("Thời gian đến dự kiến (expectedArriveTime) không được để trống");
         }
 
-        LocalDateTime now = context.getNow() != null ? context.getNow() : LocalDateTime.now();
-        if (arriveAt.isBefore(now.plusHours(2))) {
-            fail("expectedArriveTime must be at least 2 hours after now");
-        }
+        // Temporarily disable rule: expectedArriveTime must be at least 2 hours after current time.
+        // Instant now = context.getNow() != null ? context.getNow() : Instant.now();
+        // if (arriveAt.isBefore(now.plus(Duration.ofHours(2)))) {
+        //     fail("Thời gian đặt bàn phải sớm hơn thời điểm hiện tại ít nhất 2 tiếng");
+        // }
     }
 }

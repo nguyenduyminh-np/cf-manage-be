@@ -5,6 +5,7 @@ import com.duyminhdev.cf_manager.dto.request.dish_order_detail.DishOrderDetailLi
 import com.duyminhdev.cf_manager.dto.request.dish_order_detail.DishOrderDetailListByTableRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order_detail.DishGroupedByTableResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order_detail.DishOrderDetailResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.DishOrderDetailService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/dish-order-detail")
 @RequiredArgsConstructor
+@AdminOrManagerAccess
 public class DishOrderDetailController {
 
     private final DishOrderDetailService dishOrderDetailService;

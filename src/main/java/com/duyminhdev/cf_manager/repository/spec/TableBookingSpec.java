@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
 import java.sql.Date;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -56,7 +57,7 @@ public final class TableBookingSpec {
             }
 
             if (request.getCheckInAt() != null) {
-                Date checkInDate = Date.valueOf(request.getCheckInAt().toLocalDate());
+                Date checkInDate = Date.valueOf(request.getCheckInAt().atZone(ZoneOffset.UTC).toLocalDate());
                 predicates.add(cb.equal(
                         cb.function("DATE", Date.class, root.get("checkInAt")),
                         checkInDate
@@ -64,7 +65,7 @@ public final class TableBookingSpec {
             }
 
             if (request.getCheckOutAt() != null) {
-                Date checkOutDate = Date.valueOf(request.getCheckOutAt().toLocalDate());
+                Date checkOutDate = Date.valueOf(request.getCheckOutAt().atZone(ZoneOffset.UTC).toLocalDate());
                 predicates.add(cb.equal(
                         cb.function("DATE", Date.class, root.get("checkOutAt")),
                         checkOutDate

@@ -5,7 +5,8 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.Instant;
 
 @Entity
 @Table(name = "account_token")
@@ -25,7 +26,7 @@ public class AccountToken {
     private String refreshToken;
 
     @Column(name = "refresh_token_expires_at")
-    private LocalDateTime refreshTokenExpiresAt;
+    private Instant refreshTokenExpiresAt;
 
     @Column(name = "access_token_jti", unique = true, length = 255)
     private String accessTokenJti;
@@ -36,9 +37,9 @@ public class AccountToken {
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime DEFAULT CURRENT_TIMESTAMP")
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false, columnDefinition = "datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
-    private LocalDateTime updatedTime;
+    private Instant updatedTime;
 }

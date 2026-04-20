@@ -3,7 +3,7 @@ package com.duyminhdev.cf_manager.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "debt")
@@ -27,14 +27,14 @@ public class Debt {
     private Boolean isPaId;
 
     @Column(name = "paid_at")
-    private LocalDateTime paIdAt;
+    private Instant paIdAt;
 
     @Lob
     @Column(name = "note")
     private String note;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")

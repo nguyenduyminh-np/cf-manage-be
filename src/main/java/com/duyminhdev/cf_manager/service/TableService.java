@@ -1,9 +1,11 @@
 package com.duyminhdev.cf_manager.service;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.table.TableAvailableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableDetailRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableAvailableResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableDetailResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableSearchResponseDTO;
 
@@ -25,4 +27,9 @@ public interface TableService {
      * Cập nhật thủ công trạng thái bàn theo yêu cầu vận hành.
      */
     Boolean updateStatus(TableStatusUpdateRequestDTO request);
+
+    /**
+     * Lấy danh sách bàn đang ở trạng thái AVAILABLE.
+     */
+    List<TableAvailableResponseDTO> availableTables(TableAvailableSearchRequestDTO request);
 }

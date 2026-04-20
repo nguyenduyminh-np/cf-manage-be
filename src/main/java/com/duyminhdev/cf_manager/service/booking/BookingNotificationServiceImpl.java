@@ -7,7 +7,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -52,7 +52,7 @@ public class BookingNotificationServiceImpl implements BookingNotificationServic
             at = envelope.get("occurredAt");
         }
         if (at == null) {
-            at = LocalDateTime.now();
+            at = Instant.now();
         }
         envelope.put("at", at);
 

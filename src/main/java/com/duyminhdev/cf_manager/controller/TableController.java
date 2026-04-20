@@ -3,10 +3,13 @@ package com.duyminhdev.cf_manager.controller;
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.table.TableDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableAvailableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableAvailableResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableDetailResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableSearchResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.TableService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/table")
 @RequiredArgsConstructor
+@AdminOrManagerAccess
 public class TableController {
 
     private final TableService tableService;
@@ -38,6 +42,22 @@ public class TableController {
          * 3. Tra ket qua theo format ApiResponse
          */
         return new ApiResponse<>(200, "SEARCH_TABLE_SUCCESS", tableService.search(request));
+    }
+
+    /**
+     * Lay danh sach ban dang trong trang thai AVAILABLE.
+     */
+    @PostMapping("/available")
+    public ApiResponse<List<TableAvailableResponseDTO>> available(
+            @Valid @RequestBody(required = false) TableAvailableSearchRequestDTO request
+    ) {
+        /**
+         * Flow API table available:
+         * 1. Nhan request body filter dong theo table_name, floor, seat
+         * 2. Goi service lay danh sach ban co trang thai AVAILABLE theo bo loc
+         * 3. Tra response ve FE
+         */
+        return new ApiResponse<>(200, "GET_AVAILABLE_TABLES_SUCCESS", tableService.availableTables(request));
     }
 
     /**

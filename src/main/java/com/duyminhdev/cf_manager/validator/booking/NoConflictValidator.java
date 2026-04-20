@@ -6,7 +6,7 @@ import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -14,6 +14,11 @@ import java.util.List;
 public class NoConflictValidator extends AbstractBookingValidationRule {
 
     private final TableBookingRepository tableBookingRepository;
+
+    @Override
+    protected String ruleTag() {
+        return "RULE_01_02_12_NO_CONFLICT";
+    }
 
     @Override
     public int order() {
@@ -24,6 +29,7 @@ public class NoConflictValidator extends AbstractBookingValidationRule {
     public boolean supports(BookingValidationUseCase useCase) {
         return useCase == BookingValidationUseCase.CREATE_BOOKING
                 || useCase == BookingValidationUseCase.CONFIRM_BOOKING
+                || useCase == BookingValidationUseCase.WALK_IN_BOOKING
                 || useCase == BookingValidationUseCase.LATE_ARRIVAL_WALK_IN;
     }
 
@@ -31,13 +37,13 @@ public class NoConflictValidator extends AbstractBookingValidationRule {
     public void validate(BookingValidationContext context) {
         Integer tableId = context.resolveTableId();
         if (tableId == null) {
-            fail("tableId is required for conflict check");
+            fail("Mã bàn (tableId) là bắt buộc để kiểm tra xung đột lịch đặt");
         }
 
-        LocalDateTime start = context.resolveExpectedArriveTime();
-        LocalDateTime end = context.resolveExpectedCheckOut();
+        Instant start = context.resolveExpectedArriveTime();
+        Instant end = context.resolveExpectedCheckOut();
         if (start == null || end == null) {
-            fail("expectedArriveTime and expectedCheckOut are required for conflict check");
+            fail("Thời gian đến và trả bàn là bắt buộc để kiểm tra xung đột lịch đặt");
         }
 
         Integer excludeBookingId = context.resolveBookingId();
@@ -54,7 +60,7 @@ public class NoConflictValidator extends AbstractBookingValidationRule {
         );
 
         if (hasConflict) {
-            fail("time slot conflicts with an existing booking on the same table");
+            fail("Khoảng thời gian đặt bàn bị xung đột với lịch đặt khác trên cùng bàn này");
         }
     }
 }

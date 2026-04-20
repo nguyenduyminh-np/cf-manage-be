@@ -6,7 +6,8 @@ import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,13 +19,13 @@ public class BookingValidationContext {
     private final TableEntity table;
     private final BookingStatusEnum currentStatus;
     private final BookingStatusEnum targetStatus;
-    private final LocalDateTime requestedCheckInAt;
-    private final LocalDateTime requestedCheckOutAt;
-    private final LocalDateTime expectedArriveTime;
-    private final LocalDateTime expectedCheckOut;
+    private final Instant requestedCheckInAt;
+    private final Instant requestedCheckOutAt;
+    private final Instant expectedArriveTime;
+    private final Instant expectedCheckOut;
 
     @Builder.Default
-    private final LocalDateTime now = LocalDateTime.now();
+    private final Instant now = Instant.now();
 
     @Builder.Default
     private final boolean force = false;
@@ -53,21 +54,21 @@ public class BookingValidationContext {
         return booking != null ? booking.getId() : null;
     }
 
-    public LocalDateTime resolveExpectedArriveTime() {
+    public Instant resolveExpectedArriveTime() {
         if (expectedArriveTime != null) {
             return expectedArriveTime;
         }
         return booking != null ? booking.getExpectedArriveTime() : null;
     }
 
-    public LocalDateTime resolveExpectedCheckOut() {
+    public Instant resolveExpectedCheckOut() {
         if (expectedCheckOut != null) {
             return expectedCheckOut;
         }
         return booking != null ? booking.getExpectedCheckOut() : null;
     }
 
-    public LocalDateTime resolveCheckInOrNow() {
+    public Instant resolveCheckInOrNow() {
         if (requestedCheckInAt != null) {
             return requestedCheckInAt;
         }
@@ -80,14 +81,14 @@ public class BookingValidationContext {
     }
 
     public long resolveSessionDurationMinutes() {
-        LocalDateTime arrive = resolveExpectedArriveTime();
-        LocalDateTime checkOut = resolveExpectedCheckOut();
+        Instant arrive = resolveExpectedArriveTime();
+        Instant checkOut = resolveExpectedCheckOut();
 
         if (arrive == null || checkOut == null) {
             return 120L;
         }
 
-        long minutes = java.time.Duration.between(arrive, checkOut).toMinutes();
+        long minutes = Duration.between(arrive, checkOut).toMinutes();
         return minutes > 0 ? minutes : 120L;
     }
 

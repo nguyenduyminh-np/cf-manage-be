@@ -13,6 +13,11 @@ public class PendingConfirmationAdvisoryValidator extends AbstractBookingValidat
     private final TableBookingRepository tableBookingRepository;
 
     @Override
+    protected String ruleTag() {
+        return "RULE_18_PENDING_CONFIRMATION_ADVISORY";
+    }
+
+    @Override
     public int order() {
         return 20;
     }
@@ -27,7 +32,7 @@ public class PendingConfirmationAdvisoryValidator extends AbstractBookingValidat
     public void validate(BookingValidationContext context) {
         Integer tableId = context.resolveTableId();
         if (tableId == null) {
-            fail("tableId is required for pending-confirmation advisory");
+            fail("Mã bàn (tableId) là bắt buộc để kiểm tra cảnh báo chờ xác nhận");
         }
 
         boolean hasPending = tableBookingRepository.existsActiveBookingOnTableFromTimeAndStatuses(
@@ -38,7 +43,7 @@ public class PendingConfirmationAdvisoryValidator extends AbstractBookingValidat
         );
 
         if (hasPending) {
-            warn(context, "table has pending confirmation bookings; staff should contact customer before walk-in assignment");
+            warn(context, "Bàn có đặt chỗ đang chờ xác nhận; nhân viên cần liên hệ khách hàng trước khi xếp bàn walk-in");
         }
     }
 }

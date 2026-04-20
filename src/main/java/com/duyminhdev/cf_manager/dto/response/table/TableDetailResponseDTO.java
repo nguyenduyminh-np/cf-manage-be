@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.dto.response.table;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -22,6 +22,6 @@ public class TableDetailResponseDTO {
     private Integer slot;
 
     private Boolean active;
-    private LocalDateTime createdTime;
+    private Instant createdTime;
 }
 

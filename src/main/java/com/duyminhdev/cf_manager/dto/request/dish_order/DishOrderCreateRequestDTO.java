@@ -12,14 +12,14 @@ import java.util.List;
 
 @Data
 public class DishOrderCreateRequestDTO {
-    @NotNull(message = "tableId is required")
-    @Positive(message = "tableId must be > 0")
+    @NotNull(message = "Mã bàn không được để trống")
+    @Positive(message = "Mã bàn phải lớn hơn 0")
     private Integer tableId;
 
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Invalid dishOrderStatus code")
+    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái đơn gọi món không hợp lệ")
     private String dishOrderStatus;
 
-    @NotEmpty(message = "dishOrderDetails must not be empty")
+    @NotEmpty(message = "Danh sách món ăn không được để rỗng")
     @Valid
     private List<DishOrderDetailPayloadDTO> dishOrderDetails;
 }

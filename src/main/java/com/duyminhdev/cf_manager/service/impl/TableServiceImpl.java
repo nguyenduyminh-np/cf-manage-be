@@ -1,10 +1,13 @@
 package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableAvailableNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableAvailableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableDetailRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableAvailableResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableDetailResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableSearchResponseDTO;
 import com.duyminhdev.cf_manager.entity.TableEntity;
@@ -54,6 +57,17 @@ public class TableServiceImpl implements TableService {
         response.setTotalElements(pageResult.getTotalElements());
         response.setTotalPages(pageResult.getTotalPages());
         return response;
+    }
+
+    @Override
+    /**
+     * Lấy danh sách bàn có trạng thái AVAILABLE.
+     */
+    public List<TableAvailableResponseDTO> availableTables(TableAvailableSearchRequestDTO request) {
+        List<TableAvailableNativeResultDTO> availableTables = nativeSqlTableRepository.findAvailableTables(request);
+        return availableTables.stream()
+                .map(tableMapper::toAvailableResponseDTO)
+                .toList();
     }
 
     @Override

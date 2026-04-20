@@ -1,9 +1,10 @@
 package com.duyminhdev.cf_manager.dto.response.table_booking;
 
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -18,10 +19,14 @@ public class TableBookingResponseDTO {
     private String tableCode;
     private String tableName;
 
-    private LocalDateTime expectedArriveTime;
-    private LocalDateTime checkInAt;
-    private LocalDateTime expectedCheckOut;
-    private LocalDateTime checkOutAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant expectedArriveTime;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant checkInAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant expectedCheckOut;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant checkOutAt;
 
     private String bookingStatus;
     private String bookingStatusName;
@@ -30,7 +35,8 @@ public class TableBookingResponseDTO {
     private String phoneNumber;
     private BigDecimal depositAmount;
     private Boolean depositPaid;
-    private LocalDateTime depositPaidAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant depositPaidAt;
     private Boolean depositForfeited;
     private String depositTxnRef;
     private String note;
@@ -40,6 +46,7 @@ public class TableBookingResponseDTO {
     private String accountFullName;
 
     private Boolean active;
-    private LocalDateTime createdAt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")
+    private Instant createdAt;
 }
 

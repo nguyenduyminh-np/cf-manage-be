@@ -23,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -44,7 +45,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
     @Override
     @Transactional
     public TableBooking createBooking(TableBookingCreateRequestDTO request) {
-        Integer tableId = requirePositive(request.getTableId(), "tableId is required");
+        Integer tableId = requirePositive(request.getTableId(), "Mã bàn (tableId) là bắt buộc");
         return bookingLockService.executeWithTableLock(tableId, () -> {
             serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
             serviceSupport.validateBookingTimes(
@@ -68,7 +69,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
             TableBooking entity = tableBookingMapper.toNewEntity(request);
             entity.setTable(table);
             entity.setAccount(account);
-            entity.setCreatedAt(LocalDateTime.now());
+            entity.setCreatedAt(Instant.now());
             entity.setActive(true);
 
             bookingStateMachine.initialize(entity, initialStatus);
@@ -96,7 +97,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
     @Override
     @Transactional
-    public TableBooking checkIn(Integer bookingId, LocalDateTime requestedCheckInAt, boolean force) {
+    public TableBooking checkIn(Integer bookingId, Instant requestedCheckInAt, boolean force) {
         return transitionUseCase(
                 bookingId,
                 BookingStatusEnum.CHECKED_IN,
@@ -110,7 +111,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
     @Override
     @Transactional
-    public TableBooking checkOut(Integer bookingId, LocalDateTime requestedCheckOutAt) {
+    public TableBooking checkOut(Integer bookingId, Instant requestedCheckOutAt) {
         return transitionUseCase(
                 bookingId,
                 BookingStatusEnum.COMPLETED,
@@ -152,10 +153,10 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
     @Override
     @Transactional
-    public TableBooking extendBooking(Integer bookingId, LocalDateTime newExpectedCheckOut, boolean force) {
-        requirePositive(bookingId, "bookingId is required");
+    public TableBooking extendBooking(Integer bookingId, Instant newExpectedCheckOut, boolean force) {
+        requirePositive(bookingId, "Mã đặt bàn (bookingId) là bắt buộc");
         if (newExpectedCheckOut == null) {
-            throw new InvalidDataException("newExpectedCheckOut is required");
+            throw new InvalidDataException("Thời gian trả bàn mới (newExpectedCheckOut) là bắt buộc");
         }
 
         TableBooking beforeLock = loadActiveBooking(bookingId);
@@ -166,7 +167,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
             BookingStatusEnum currentStatus = BookingStatusEnum.fromCode(booking.getBookingStatus());
 
             if (!currentStatus.isCheckedIn()) {
-                throw new InvalidDataException("extendBooking only supports CHECKED_IN bookings");
+                throw new InvalidDataException("Gia hạn chỉ áp dụng cho đặt bàn đang trong trạng thái ĐÃ_CHECK_IN");
             }
 
             serviceSupport.validateBookingTimes(
@@ -186,7 +187,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
                     .expectedArriveTime(booking.getExpectedArriveTime())
                     .expectedCheckOut(newExpectedCheckOut)
                     .excludeBookingId(booking.getId())
-                    .now(LocalDateTime.now())
+                    .now(Instant.now())
                     .force(force)
                     .build();
 
@@ -204,12 +205,12 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
     @Override
     @Transactional
     public TableBooking createWalkIn(TableBookingCreateRequestDTO request, boolean force) {
-        Integer tableId = requirePositive(request.getTableId(), "tableId is required");
+        Integer tableId = requirePositive(request.getTableId(), "Mã bàn (tableId) là bắt buộc");
 
         return bookingLockService.executeWithTableLock(tableId, () -> {
             TableEntity table = serviceSupport.getActiveTable(tableId);
             Account account = serviceSupport.getCurrentAccount();
-            LocalDateTime now = LocalDateTime.now();
+            Instant now = Instant.now();
 
             TableBooking walkInBooking = buildWalkInBooking(request, table, account, now);
 
@@ -246,7 +247,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
     @Override
     @Transactional
     public TableBooking createWalkInFromLateArrival(Integer lateBookingId, TableBookingCreateRequestDTO walkInRequest, boolean force) {
-        requirePositive(lateBookingId, "lateBookingId is required");
+        requirePositive(lateBookingId, "Mã đặt bàn trễ (lateBookingId) là bắt buộc");
 
         TableBooking lateBookingBeforeLock = loadActiveBooking(lateBookingId);
         Integer oldTableId = requireTableId(lateBookingBeforeLock);
@@ -256,7 +257,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
         return bookingLockService.executeWithTableLocks(List.of(oldTableId, newTableId), () -> {
             TableBooking lateBooking = loadActiveBooking(lateBookingId);
-            validateLateArrivalNoShow(lateBooking, LocalDateTime.now());
+            validateLateArrivalNoShow(lateBooking, Instant.now());
 
             bookingStateMachine.transition(BookingTransitionContext.builder()
                     .booking(lateBooking)
@@ -276,7 +277,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
             TableEntity newTable = serviceSupport.getActiveTable(newTableId);
             Account account = serviceSupport.getCurrentAccount();
-            LocalDateTime now = LocalDateTime.now();
+            Instant now = Instant.now();
 
             TableBooking walkInBooking = buildWalkInBooking(safeWalkInRequest, newTable, account, now);
 
@@ -322,8 +323,8 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
     @Override
     @Transactional
-    public TableBooking cancelBookingNoOrderTimeout(Integer bookingId, LocalDateTime now) {
-        requirePositive(bookingId, "bookingId is required");
+    public TableBooking cancelBookingNoOrderTimeout(Integer bookingId, Instant now) {
+        requirePositive(bookingId, "Mã đặt bàn (bookingId) là bắt buộc");
 
         TableBooking beforeLock = loadActiveBooking(bookingId);
         Integer tableId = requireTableId(beforeLock);
@@ -332,16 +333,16 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
             TableBooking booking = loadActiveBooking(bookingId);
             BookingStatusEnum currentStatus = BookingStatusEnum.fromCode(booking.getBookingStatus());
             if (!currentStatus.isCheckedIn()) {
-                throw new InvalidDataException("cancelBookingNoOrderTimeout only supports CHECKED_IN bookings");
+                throw new InvalidDataException("Hủy đặt bàn do quá thời gian không gọi món chỉ áp dụng cho đặt bàn đang ĐÃ_CHECK_IN");
             }
 
-            LocalDateTime effectiveNow = now != null ? now : LocalDateTime.now();
-            if (booking.getCheckInAt() == null || effectiveNow.isBefore(booking.getCheckInAt().plusMinutes(20))) {
-                throw new InvalidDataException("Booking is not eligible for no-order timeout cancellation");
+            Instant effectiveNow = now != null ? now : Instant.now();
+            if (booking.getCheckInAt() == null || effectiveNow.isBefore(booking.getCheckInAt().plus(Duration.ofMinutes(20)))) {
+                throw new InvalidDataException("Đặt bàn chưa đủ điều kiện để hủy do quá thời gian không gọi món");
             }
 
             if (serviceSupport.hasUnfinishedOrders(tableId)) {
-                throw new InvalidDataException("Booking has active dish orders and cannot be timeout-cancelled");
+                throw new InvalidDataException("Đặt bàn có món ăn đang xử lý, không thể hủy do quá thời gian");
             }
 
             bookingStateMachine.transition(BookingTransitionContext.builder()
@@ -367,8 +368,8 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
 
     @Override
     @Transactional
-    public TableBooking markDepositPaid(Integer bookingId, BigDecimal depositAmount, String depositTxnRef, LocalDateTime paidAt) {
-        requirePositive(bookingId, "bookingId is required");
+    public TableBooking markDepositPaid(Integer bookingId, BigDecimal depositAmount, String depositTxnRef, Instant paidAt) {
+        requirePositive(bookingId, "Mã đặt bàn (bookingId) là bắt buộc");
 
         TableBooking beforeLock = loadActiveBooking(bookingId);
         Integer tableId = requireTableId(beforeLock);
@@ -377,21 +378,30 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
             TableBooking booking = loadActiveBooking(bookingId);
             BookingStatusEnum currentStatus = BookingStatusEnum.fromCode(booking.getBookingStatus());
             if (currentStatus.isCancelled() || currentStatus.isCompleted() || currentStatus == BookingStatusEnum.EXPIRED) {
-                throw new InvalidDataException("deposit action is not allowed for terminal booking status");
+                throw new InvalidDataException("Không thể thực hiện đặt cọc khi đặt bàn đã ở trạng thái kết thúc");
             }
 
             BigDecimal effectiveAmount = depositAmount != null ? depositAmount : booking.getDepositAmount();
             if (effectiveAmount == null || effectiveAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new InvalidDataException("depositAmount must be > 0");
+                throw new InvalidDataException("Số tiền đặt cọc (depositAmount) phải lớn hơn 0");
             }
 
             booking.setDepositAmount(effectiveAmount);
             booking.setDepositPaid(true);
-            booking.setDepositPaidAt(paidAt != null ? paidAt : LocalDateTime.now());
+            booking.setDepositPaidAt(paidAt != null ? paidAt : Instant.now());
             booking.setDepositForfeited(false);
             booking.setDepositTxnRef(StringUtils.hasText(depositTxnRef) ? depositTxnRef.trim() : booking.getDepositTxnRef());
 
+            if (currentStatus.isPending()) {
+                bookingStateMachine.transition(BookingTransitionContext.builder()
+                        .booking(booking)
+                        .targetStatus(BookingStatusEnum.CONFIRMED)
+                        .allowNoopTransition(false)
+                        .build());
+            }
+
             TableBooking saved = tableBookingRepository.save(booking);
+            serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
             bookingDomainEventPublisher.publish(BookingMutationType.DEPOSIT, saved.getId(), saved.getTable().getId());
             return saved;
         });
@@ -400,13 +410,13 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
     private TableBooking transitionUseCase(
             Integer bookingId,
             BookingStatusEnum targetStatus,
-            LocalDateTime requestedCheckInAt,
-            LocalDateTime requestedCheckOutAt,
+            Instant requestedCheckInAt,
+            Instant requestedCheckOutAt,
             boolean force,
             boolean allowNoop,
             BookingMutationType mutationType
     ) {
-        requirePositive(bookingId, "bookingId is required");
+        requirePositive(bookingId, "Mã đặt bàn (bookingId) là bắt buộc");
         TableBooking beforeLock = loadActiveBooking(bookingId);
         Integer tableId = requireTableId(beforeLock);
 
@@ -433,7 +443,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
             TableBookingCreateRequestDTO request,
             TableEntity table,
             Account account,
-            LocalDateTime now
+            Instant now
     ) {
         TableBookingCreateRequestDTO safeRequest = request != null ? request : new TableBookingCreateRequestDTO();
         TableBooking booking = tableBookingMapper.toNewEntity(safeRequest);
@@ -454,40 +464,40 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
         return booking;
     }
 
-    private LocalDateTime resolveWalkInCheckOut(LocalDateTime requestedCheckOut, LocalDateTime now) {
+    private Instant resolveWalkInCheckOut(Instant requestedCheckOut, Instant now) {
         if (requestedCheckOut == null) {
-            return now.plusHours(DEFAULT_WALK_IN_DURATION_HOURS);
+            return now.plus(Duration.ofHours(DEFAULT_WALK_IN_DURATION_HOURS));
         }
         if (!requestedCheckOut.isAfter(now)) {
-            throw new InvalidDataException("walk-in expectedCheckOut must be greater than now");
+            throw new InvalidDataException("Thời gian trả bàn walk-in phải sau thời điểm hiện tại");
         }
         return requestedCheckOut;
     }
 
-    private void validateLateArrivalNoShow(TableBooking lateBooking, LocalDateTime now) {
+    private void validateLateArrivalNoShow(TableBooking lateBooking, Instant now) {
         BookingStatusEnum status = BookingStatusEnum.fromCode(lateBooking.getBookingStatus());
         if (!status.isConfirmed()) {
-            throw new InvalidDataException("late-arrival walk-in requires booking status CONFIRMED");
+            throw new InvalidDataException("Đặt bàn muộn đến yêu cầu trạng thái phải là ĐÃ_XÁC_NHẬN (CONFIRMED)");
         }
 
         if (lateBooking.getCheckInAt() != null) {
-            throw new InvalidDataException("late-arrival walk-in requires no check-in on original booking");
+            throw new InvalidDataException("Đặt bàn muộn đến yêu cầu chưa có check-in trên đặt bàn gốc");
         }
 
-        LocalDateTime expectedArrive = lateBooking.getExpectedArriveTime();
-        if (expectedArrive == null || !now.isAfter(expectedArrive.plusMinutes(30))) {
-            throw new InvalidDataException("late-arrival walk-in requires no-show threshold over 30 minutes");
+        Instant expectedArrive = lateBooking.getExpectedArriveTime();
+        if (expectedArrive == null || !now.isAfter(expectedArrive.plus(Duration.ofMinutes(30)))) {
+            throw new InvalidDataException("Đặt bàn muộn đến yêu cầu quá ngưỡng no-show trên 30 phút");
         }
     }
 
     private TableBooking loadActiveBooking(Integer bookingId) {
         return tableBookingRepository.findByIdAndActiveTrue(bookingId)
-                .orElseThrow(() -> new InvalidDataException("Booking not found with id: " + bookingId));
+                .orElseThrow(() -> new InvalidDataException("Không tìm thấy đặt bàn với id: " + bookingId));
     }
 
     private Integer requireTableId(TableBooking booking) {
         if (booking.getTable() == null || booking.getTable().getId() == null) {
-            throw new InvalidDataException("booking.tableId is required");
+            throw new InvalidDataException("Không tìm thấy thông tin bàn liên kết với đặt bàn này");
         }
         return booking.getTable().getId();
     }
