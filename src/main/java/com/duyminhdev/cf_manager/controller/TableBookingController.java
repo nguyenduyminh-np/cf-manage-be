@@ -82,6 +82,14 @@ public class TableBookingController {
         return new ApiResponse<>(200, "CREATE_TABLE_BOOKING_SUCCESS", tableBookingService.create(request));
     }
 
+    @PostMapping("/delete")
+    public ApiResponse<Void> delete(
+            @Valid @RequestBody TableBookingConfirmRequestDTO request
+    ) {
+        tableBookingService.delete(request.getBookingId());
+        return new ApiResponse<>(200, "DELETE_TABLE_BOOKING_SUCCESS");
+    }
+
     /**
      * Nghiep vu: Cap nhat thong tin booking hien co.
      * Rule: Chi cap nhat booking active va khong o trang thai terminal.

@@ -1,10 +1,10 @@
 package com.duyminhdev.cf_manager.service;
 
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderCreateRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderListByTableRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderStatusUpdateRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -29,4 +29,6 @@ public interface DishOrderService {
      * Cập nhật trạng thái order món và tính lại trạng thái bàn.
      */
     Boolean updateStatus(DishOrderStatusUpdateRequestDTO request);
+
+    PageResponse<List<OrderHistoryResponseDTO>> searchOrderHistoryByTable(OrderHistorySearchRequestDTO request);
 }

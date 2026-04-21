@@ -1,11 +1,10 @@
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderCreateRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderListByTableRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderStatusUpdateRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
 import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.DishOrderService;
 import jakarta.validation.Valid;
@@ -24,6 +23,14 @@ import java.util.List;
 public class DishOrderController {
 
     private final DishOrderService dishOrderService;
+
+
+    @PostMapping("/order-history")
+    public ApiResponse<PageResponse<List<OrderHistoryResponseDTO>>> searchOrderHistoryByTable(
+            @Valid @RequestBody OrderHistorySearchRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "SEARCH_DISH_ORDER_HISTORY_SUCCESS", dishOrderService.searchOrderHistoryByTable(request));
+    }
 
     /**
      * Lay lich su order mon theo ban.

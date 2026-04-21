@@ -396,6 +396,12 @@ public class TableBookingServiceImpl implements TableBookingService {
         return buildAvailableSlots(dayStart, dayEnd, blockingBookings);
     }
 
+    @Override
+    @Transactional
+    public void delete(Integer bookingId) {
+        tableBookingRepository.deleteById(bookingId);
+    }
+
     private List<TableBookingAvailableSlotResponseDTO> buildAvailableSlots(
             Instant dayStart,
             Instant dayEnd,

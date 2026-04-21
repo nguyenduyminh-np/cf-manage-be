@@ -16,6 +16,8 @@ import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateReq
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 import java.util.List;
 
@@ -70,4 +72,6 @@ public interface TableBookingService {
     TableBookingResponseDTO deposit(TableBookingDepositRequestDTO request);
 
     List<TableBookingAvailableSlotResponseDTO> getAvailableSlots(TableBookingAvailableSlotsRequestDTO request);
+
+    void delete( Integer bookingId);
 }

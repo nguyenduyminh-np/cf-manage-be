@@ -1,7 +1,10 @@
 package com.duyminhdev.cf_manager.service.impl;
 
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.OrderHistoryNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
 import com.duyminhdev.cf_manager.entity.*;
 import com.duyminhdev.cf_manager.enums.DishOrderStatusCodeEnum;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
@@ -9,6 +12,7 @@ import com.duyminhdev.cf_manager.mapper.DishOrderDetailMapper;
 import com.duyminhdev.cf_manager.mapper.DishOrderMapper;
 import com.duyminhdev.cf_manager.repository.DishOrderDetailRepository;
 import com.duyminhdev.cf_manager.repository.DishOrderRepository;
+import com.duyminhdev.cf_manager.repository.impl.NativeSqlOrderHistoryRepositoryImpl;
 import com.duyminhdev.cf_manager.service.DishOrderService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +32,7 @@ public class DishOrderServiceImpl implements DishOrderService {
     private final DishOrderMapper dishOrderMapper;
     private final DishOrderDetailMapper dishOrderDetailMapper;
     private final ServiceSupport serviceSupport;
-
+    private final NativeSqlOrderHistoryRepositoryImpl nativeSqlOrderHistoryRepository;
     @Override
     /**
      * Lấy danh sách order của một bàn theo thời gian tạo giảm dần.
@@ -162,6 +166,32 @@ public class DishOrderServiceImpl implements DishOrderService {
         serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
 
         return true;
+    }
+
+    @Override
+    public PageResponse<List<OrderHistoryResponseDTO>> searchOrderHistoryByTable(OrderHistorySearchRequestDTO request) {
+        PageResponse<List<OrderHistoryNativeResultDTO>> pageResult = nativeSqlOrderHistoryRepository.search(request);
+
+        List<OrderHistoryResponseDTO> mappedRows = pageResult.getRows().stream()
+                .map(row -> OrderHistoryResponseDTO.builder()
+                        .tableName(row.getTableName())
+                        .employeeName(row.getEmployeeName())
+                        .orderStatus(row.getOrderStatus())
+                        .createdAt(row.getCreatedAt())
+                        .note(row.getNote())
+                        .totalQuantity(row.getTotalQuantity())
+                        .totalAmount(row.getTotalAmount())
+                        .build())
+                .toList();
+
+        PageResponse<List<OrderHistoryResponseDTO>> response = new PageResponse<>();
+        response.setRows(mappedRows);
+        response.setPageNo(pageResult.getPageNo());
+        response.setPageSize(pageResult.getPageSize());
+        response.setTotalElements(pageResult.getTotalElements());
+        response.setTotalPages(pageResult.getTotalPages());
+
+        return response;
     }
 
     private void replaceOrderDetails(DishOrder order, List<DishOrderDetailPayloadDTO> payloads) {
