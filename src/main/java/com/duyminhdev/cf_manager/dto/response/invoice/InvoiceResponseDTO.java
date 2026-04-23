@@ -14,6 +14,7 @@ public class InvoiceResponseDTO {
 
     private Integer invoiceId;
     private String invoiceCode;
+    private Long dishOrderId;
 
     private Integer tableId;
     private String tableCode;
@@ -31,6 +32,10 @@ public class InvoiceResponseDTO {
 
     private Integer guestCount;
     private BigDecimal totalMoney;
+
+    private Integer bookingId;
+    private String customerName;
+    private String customerPhone;
 
     private Boolean active;
     private Instant createdTime;

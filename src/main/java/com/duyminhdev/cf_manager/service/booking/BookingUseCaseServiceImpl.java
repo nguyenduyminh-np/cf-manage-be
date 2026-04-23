@@ -46,6 +46,8 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
     @Transactional
     public TableBooking createBooking(TableBookingCreateRequestDTO request) {
         Integer tableId = requirePositive(request.getTableId(), "Mã bàn (tableId) là bắt buộc");
+
+        // bắt đầu khóa bàn để tạo booking, chặn race-condition
         return bookingLockService.executeWithTableLock(tableId, () -> {
             serviceSupport.validateExpectedArriveTime(request.getExpectedArriveTime());
             serviceSupport.validateBookingTimes(

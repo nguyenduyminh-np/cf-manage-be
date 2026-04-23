@@ -43,4 +43,18 @@ public class Invoice {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dining_table_id", nullable = false, foreignKey = @ForeignKey(name = "fk_invoice_dining_table_id"))
     private TableEntity table;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dish_order_id", nullable = false)
+    private DishOrder dishOrder;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "booking_id", nullable = true)
+    private TableBooking booking;
+
+    @Column(name = "customer_name", length = 255)
+    private String customerName;
+
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone;
 }

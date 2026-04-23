@@ -1,5 +1,8 @@
 # core
 
+> **Cập nhật:** 2026-04-22 — Đồng bộ với code triển khai thực tế.
+> **Lưu ý quan trọng:** Toàn bộ field thời gian trong code sử dụng kiểu `Instant` (UTC), KHÔNG phải `LocalDateTime`. FE cần gửi/nhận thời gian dạng ISO-8601 UTC (VD: `2026-04-10T12:00:00.000Z`).
+
 # Convention
 
 ### Bảng table_booking: Bảng trong DB lưu bản ghi 1 đơn đặt bàn, có thể
@@ -87,16 +90,24 @@
 - Mọi lỗi business phải trả về đúng nguồn gây lỗi để phục vụ báo cáo nghiệp vụ, trace log và hiển thị FE.
 - Message phải phản ánh rõ: rule nào vi phạm + validator/state-machine nào phát hiện.
 
-### Format chuẩn
+### Format chuẩn (theo `BookingStateMachineConstant.java`)
 
-- Validator fail:
+> **Source:** `constant/BookingStateMachineConstant.java`
+> - `PREFIX_RULE_VIOLATION` = `"BOOKING_TRANSITION_RULE_VIOLATION: "`
+> - `PREFIX_GUARD_FAILED` = `"BOOKING_TRANSITION_GUARD_FAILED: "`
+> - `PREFIX_NOT_ALLOWED` = `"BOOKING_TRANSITION_NOT_ALLOWED: "`
+> - `ERROR_CODE_STATE_TRANSITION_INVALID` = `"BOOKING_STATE_TRANSITION_INVALID"`
+
+- Validator fail (từ `AbstractBookingValidationRule`):
   - `BOOKING_TRANSITION_RULE_VIOLATION: [RULE_TAG][ValidatorClass] <chi tiết lỗi>`
-- State machine guard fail:
+- State machine guard fail (từ `BookingStateMachineImpl.guardFailed()`):
   - `BOOKING_TRANSITION_GUARD_FAILED: [STATE_MACHINE_GUARD][BookingStateMachineImpl] <chi tiết lỗi>`
-- State machine transition not allowed:
+- State machine transition not allowed (từ `BookingStateMachineImpl.transitionNotAllowed()`):
   - `BOOKING_TRANSITION_NOT_ALLOWED: [STATE_MACHINE_TRANSITION][BookingStateMachineImpl] <chi tiết lỗi>`
-- State machine rule violation:
+- State machine rule violation (từ `BookingStateMachineImpl.ruleViolation()`):
   - `BOOKING_TRANSITION_RULE_VIOLATION: [RULE_TAG][BookingStateMachineImpl] <chi tiết lỗi>`
+
+> **Lưu ý:** HTTP code luôn là `400` với `code` = `BOOKING_STATE_TRANSITION_INVALID` (xử lý bởi `GlobalExceptionHandler.bookingStateTransition()`). Riêng lỗi lock trả `409` với `code` = `TABLE_LOCK_BUSY`.
 
 ### Mapping validator -> rule tag
 
@@ -135,7 +146,13 @@
 - Dùng một API duy nhất `POST /api/v1/table-booking/create` cho 2 nghiệp vụ:
   - Booking đặt trước thông thường.
   - Booking khách vãng lai (walk-in).
-- Đánh dấu `POST /api/v1/table-booking/walk-in` là **legacy** để tương thích ngược.
+- Đánh dấu `POST /api/v1/table-booking/walk-in` là **legacy** (`@Deprecated` trong code) để tương thích ngược.
+
+### Lưu ý kiểu dữ liệu thời gian
+
+- **Toàn bộ field thời gian** (`expectedArriveTime`, `expectedCheckOut`, `checkInAt`, `checkOutAt`, `depositPaidAt`, `createdAt`) đều dùng kiểu **`Instant`** (java.time.Instant), KHÔNG phải `LocalDateTime`.
+- Response được format qua `@JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSX", timezone = "UTC")`.
+- FE gửi request dạng ISO-8601 UTC: `"2026-04-10T12:00:00.000Z"`.
 
 ### Quy ước request mới
 
@@ -176,13 +193,49 @@
 
 ### Lưu ý implementation hiện tại
 
-- Ở tầng DTO, `expectedArriveTime` và `expectedCheckOut` vẫn có validate bắt buộc.
-- Vì vậy FE vẫn cần gửi đủ 2 field này khi gọi `/create`, kể cả khi `isWalkIn = true`.
-- Tuy nhiên trong nhánh walk-in, backend sẽ override `expectedArriveTime` về `NOW()` để đảm bảo đúng nghiệp vụ khách đến trực tiếp.
+- Ở tầng DTO (`TableBookingCreateRequestDTO`), `expectedArriveTime` và `expectedCheckOut` vẫn có annotation `@NotNull`, vì vậy FE vẫn cần gửi đủ 2 field này khi gọi `/create`, kể cả khi `isWalkIn = true`.
+- Tuy nhiên trong nhánh walk-in, backend sẽ override `expectedArriveTime` về `Instant.now()` để đảm bảo đúng nghiệp vụ khách đến trực tiếp.
 
 ### Trạng thái API /walk-in sau thay đổi
 
-- `POST /api/v1/table-booking/walk-in` được đánh dấu **legacy**.
+- `POST /api/v1/table-booking/walk-in` được đánh dấu **legacy** (`@Deprecated` trên method controller).
 - Hướng dùng mới:
   - Walk-in thuần: dùng `/create` + `isWalkIn=true`.
   - Các case cần `lateBookingId`/`force` chuyên biệt vẫn tương thích qua endpoint legacy trong giai đoạn chuyển đổi.
+
+### State Machine transitions cho phép (cập nhật theo code thực tế)
+
+> **Source:** `BookingStateMachineImpl.ALLOWED_TRANSITIONS`
+
+```
+PENDING_CONFIRMATION  →  CONFIRMED | CANCELLED | EXPIRED
+CONFIRMED             →  CHECKED_IN | CANCELLED | EXPIRED
+CHECKED_IN            →  COMPLETED | CANCELLED
+COMPLETED             →  (terminal — không chuyển tiếp)
+CANCELLED             →  (terminal — không chuyển tiếp)
+EXPIRED               →  (terminal — không chuyển tiếp)
+```
+
+> **Lưu ý:** So với tài liệu ban đầu, code hiện tại cho phép `PENDING → EXPIRED` (đơn chờ xác nhận quá lâu cũng có thể bị expire).
+
+### API Endpoints thực tế (theo `TableBookingController.java`)
+
+> **Lưu ý quan trọng:** Tất cả action endpoints sử dụng **POST với `bookingId` trong request body**, KHÔNG dùng path variable `/{id}/action` như tài liệu thiết kế ban đầu.
+
+| Action | Endpoint thực tế | Request body | Ghi chú |
+| --- | --- | --- | --- |
+| Create | `POST /create` | `TableBookingCreateRequestDTO` | Hỗ trợ `isWalkIn` |
+| Search | `POST /search` | `TableBookingSearchRequestDTO` | Phân trang |
+| Detail | `POST /detail` | `TableBookingDetailRequestDTO` (`bookingId`) | **API MỚI** |
+| Update | `POST /update` | `TableBookingUpdateRequestDTO` | Legacy |
+| Update Status | `POST /update-status` | `TableBookingStatusUpdateRequestDTO` | Legacy |
+| Confirm | `POST /confirm` | `TableBookingConfirmRequestDTO` (`bookingId`) | Body, ko path var |
+| Check-in | `POST /check-in` | `TableBookingCheckInRequestDTO` (`bookingId`, `checkInAt`, `force`) | Body |
+| Check-out | `POST /check-out` | `TableBookingCheckOutRequestDTO` (`bookingId`, `checkOutAt`) | Body |
+| Cancel | `POST /cancel` | `TableBookingCancelRequestDTO` (`bookingId`) | Body |
+| Deposit | `POST /deposit` | `TableBookingDepositRequestDTO` (`bookingId`, ...) | Body |
+| Extend | `POST /extend` | `TableBookingExtendRequestDTO` (`bookingId`, `expectedCheckOut`, `force`) | Body |
+| Available Slots | `POST /tables/available-slots` | `TableBookingAvailableSlotsRequestDTO` (`tableId`, `date`) | POST, ko GET |
+| Walk-in | `POST /walk-in` | `TableBookingWalkInRequestDTO` + query params | `@Deprecated` |
+| Pending Job | `POST /pending-job` | `TableBookingSearchRequestDTO` | **API MỚI** |
+| Delete | `POST /delete` | `TableBookingConfirmRequestDTO` (`bookingId`) | **API MỚI** |

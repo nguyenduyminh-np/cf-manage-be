@@ -7,9 +7,6 @@ import lombok.Data;
 
 @Data
 public class DishOrderDetailPayloadDTO {
-    @Positive(message = "Mã chi tiết đơn gọi phải lớn hơn 0")
-    private Integer detailId;
-
     @NotNull(message = "Mã món ăn không được để trống")
     @Positive(message = "Mã món ăn phải lớn hơn 0")
     private Integer dishId;

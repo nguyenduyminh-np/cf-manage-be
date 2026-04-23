@@ -40,6 +40,18 @@ public class TableBookingController {
 
     private final TableBookingService tableBookingService;
 
+    /**
+     * Nghiep vu: Tao booking moi cho ban.
+     * Rule: Khong cho phep tao booking trung khung gio tren ban.
+     * Chuc nang: Goi service create va tra booking vua tao.
+     */
+    @PostMapping("/create")
+    public ApiResponse<TableBookingResponseDTO> create(
+            @Valid @RequestBody TableBookingCreateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "CREATE_TABLE_BOOKING_SUCCESS", tableBookingService.create(request));
+    }
+
     @PostMapping("/pending-job")
     public ApiResponse<List<TableBookingResponseDTO>> getPendingAndConfirmedBookings(@Valid @RequestBody TableBookingSearchRequestDTO request) {
         List<TableBookingResponseDTO> data = tableBookingService.getPendingAndConfirmedBookings(request);
@@ -68,18 +80,6 @@ public class TableBookingController {
             @Valid @RequestBody TableBookingDetailRequestDTO request
     ) {
         return new ApiResponse<>(200, "GET_TABLE_BOOKING_DETAIL_SUCCESS", tableBookingService.detail(request));
-    }
-
-    /**
-     * Nghiep vu: Tao booking moi cho ban.
-     * Rule: Khong cho phep tao booking trung khung gio tren ban.
-     * Chuc nang: Goi service create va tra booking vua tao.
-     */
-    @PostMapping("/create")
-    public ApiResponse<TableBookingResponseDTO> create(
-            @Valid @RequestBody TableBookingCreateRequestDTO request
-    ) {
-        return new ApiResponse<>(200, "CREATE_TABLE_BOOKING_SUCCESS", tableBookingService.create(request));
     }
 
     @PostMapping("/delete")

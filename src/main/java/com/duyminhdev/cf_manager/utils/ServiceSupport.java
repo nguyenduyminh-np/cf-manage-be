@@ -176,7 +176,7 @@ public class ServiceSupport {
                 tableId,
                 List.of(
                         DishOrderStatusCodeEnum.CANCEL.getCode(),
-                        DishOrderStatusCodeEnum.DONE.getCode()
+                        DishOrderStatusCodeEnum.PAID.getCode()
                 )
         );
     }

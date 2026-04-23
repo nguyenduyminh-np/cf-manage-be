@@ -37,6 +37,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceDetailRepository invoiceDetailRepository;
     private final DishOrderRepository dishOrderRepository;
+    private final TableBookingRepository tableBookingRepository;
     private final NativeSqlDishOrderDetailRepository nativeSqlDishOrderDetailRepository;
     private final NativeSqlInvoiceRepository nativeSqlInvoiceRepository;
     private final InvoiceMapper invoiceMapper;
@@ -67,16 +68,7 @@ public class InvoiceServiceImpl implements InvoiceService {
      * Tạo hóa đơn mới, lưu chi tiết hóa đơn và xử lý luồng thanh toán tương ứng.
      */
     public InvoiceResponseDTO create(InvoiceCreateRequestDTO request) {
-        /**
-         * Flow create invoice:
-         * 1. Validate payment method/status
-         * 2. Load table + current account
-         * 3. Validate totalMoney khớp aggregate checkout
-         * 4. Tạo invoice header
-         * 5. Save invoice details
-         * 6. Nếu PAID ngay -> finalize payment flow
-         * 7. Nếu BANK_TRANSFER + PENDING -> build uriVnPay
-         */
+
         serviceSupport.validatePaymentMethodCode(request.getPaymentMethod());
 
         String paymentStatus = request.getPaymentStatus();
@@ -98,6 +90,23 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setPaymentMethod(request.getPaymentMethod());
         invoice.setCreatedTime(Instant.now());
         invoice.setActive(true);
+
+        DishOrder dishOrder = dishOrderRepository.findById(request.getDishOrderId().intValue())
+                .orElseThrow(() -> new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
+                        "Không tìm thấy đơn đặt món với id: " + request.getDishOrderId()
+                ));
+        invoice.setDishOrder(dishOrder);
+
+        if (request.getBookingId() != null) {
+            TableBooking booking = tableBookingRepository.findById(request.getBookingId())
+                    .orElseThrow(() -> new com.duyminhdev.cf_manager.exceptions.InvalidDataException(
+                            "Không tìm thấy đặt bàn với id: " + request.getBookingId()
+                    ));
+            invoice.setBooking(booking);
+        }
+
+        invoice.setCustomerName(request.getCustomerName());
+        invoice.setCustomerPhone(request.getCustomerPhone());
 
         Invoice savedInvoice = invoiceRepository.save(invoice);
 
@@ -235,14 +244,14 @@ public class InvoiceServiceImpl implements InvoiceService {
                 invoice.getTable().getId(),
                 List.of(
                         DishOrderStatusCodeEnum.CANCEL.getCode(),
-                        DishOrderStatusCodeEnum.DONE.getCode()
+                        DishOrderStatusCodeEnum.PAID.getCode()
                 )
         );
 
         if (!unfinishedOrders.isEmpty()) {
-            DishOrderStatus completedStatus =
-                    serviceSupport.getDishOrderStatusByCode(DishOrderStatusCodeEnum.DONE.getCode());
-            unfinishedOrders.forEach(order -> order.setStatus(completedStatus));
+            DishOrderStatus paidStatus =
+                    serviceSupport.getDishOrderStatusByCode(DishOrderStatusCodeEnum.PAID.getCode());
+            unfinishedOrders.forEach(order -> order.setStatus(paidStatus));
             dishOrderRepository.saveAll(unfinishedOrders);
         }
 

@@ -11,6 +11,7 @@ import com.duyminhdev.cf_manager.repository.TableRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -90,7 +91,7 @@ public class BookingSchedulerService {
         }
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void expireNoShowBookings() {
         Instant now = Instant.now();
         List<TableBooking> noShowCandidates = tableBookingRepository.findNoShowCandidatesForExpiration(now);
@@ -155,7 +156,7 @@ public class BookingSchedulerService {
         }
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void processNoOrderTimeoutFlow() {
         Instant now = Instant.now();
         List<TableBooking> checkedInCandidates = tableBookingRepository.findCheckedInWithoutOrderOlderThan(

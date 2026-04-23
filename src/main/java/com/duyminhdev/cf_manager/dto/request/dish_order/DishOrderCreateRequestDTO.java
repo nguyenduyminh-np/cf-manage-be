@@ -15,11 +15,8 @@ public class DishOrderCreateRequestDTO {
     @NotNull(message = "Mã bàn không được để trống")
     @Positive(message = "Mã bàn phải lớn hơn 0")
     private Integer tableId;
-
-    @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái đơn gọi món không hợp lệ")
-    private String dishOrderStatus;
+    private String description;
 
     @NotEmpty(message = "Danh sách món ăn không được để rỗng")
-    @Valid
     private List<DishOrderDetailPayloadDTO> dishOrderDetails;
 }

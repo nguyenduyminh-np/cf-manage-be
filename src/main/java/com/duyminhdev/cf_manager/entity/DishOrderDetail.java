@@ -20,6 +20,10 @@ public class DishOrderDetail {
     @Column(name = "note")
     private String note;
 
+    /**
+     * Thành tiền của dòng = quantity * dish.price (đơn giá tại thời điểm đặt).
+     * Đây KHÔNG phải là đơn giá gốc của một món
+     */
     @Column(name = "price", nullable = false, precision = 18, scale = 0)
     private BigDecimal price;
 

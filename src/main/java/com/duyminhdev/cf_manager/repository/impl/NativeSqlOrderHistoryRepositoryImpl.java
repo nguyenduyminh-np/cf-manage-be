@@ -25,9 +25,11 @@ public class NativeSqlOrderHistoryRepositoryImpl implements NativeSqlOrderHistor
 
     private static final String SELECT_COLUMNS = """
             SELECT
+                do.id AS dishOrderId,
                 dt.table_name AS tableName,
                 acc.full_name AS employeeName,
                 dos.dish_order_status_name AS orderStatus,
+                dos.dish_order_status_code AS dishOrderStatusCode,
                 do.created_at AS createdAt,
                 do.note AS note,
                 COALESCE(SUM(dod.quantity), 0) AS totalQuantity,
@@ -49,6 +51,7 @@ public class NativeSqlOrderHistoryRepositoryImpl implements NativeSqlOrderHistor
                 dt.table_name,
                 acc.full_name,
                 dos.dish_order_status_name,
+                dos.dish_order_status_code,
                 do.created_at,
                 do.note,
                 do.id
@@ -191,9 +194,11 @@ public class NativeSqlOrderHistoryRepositoryImpl implements NativeSqlOrderHistor
 
     private OrderHistoryNativeResultDTO mapTupleToDto(Tuple tuple) {
         return OrderHistoryNativeResultDTO.builder()
+                .dishOrderId(NativeSqlTupleUtils.getInteger(tuple, "dishOrderId"))
                 .tableName(NativeSqlTupleUtils.getString(tuple, "tableName"))
                 .employeeName(NativeSqlTupleUtils.getString(tuple, "employeeName"))
                 .orderStatus(NativeSqlTupleUtils.getString(tuple, "orderStatus"))
+                .dishOrderStatusCode(NativeSqlTupleUtils.getString(tuple, "dishOrderStatusCode"))
                 .createdAt(NativeSqlTupleUtils.getInstant(tuple, "createdAt"))
                 .note(NativeSqlTupleUtils.getString(tuple, "note"))
                 .totalQuantity(NativeSqlTupleUtils.getLong(tuple, "totalQuantity"))

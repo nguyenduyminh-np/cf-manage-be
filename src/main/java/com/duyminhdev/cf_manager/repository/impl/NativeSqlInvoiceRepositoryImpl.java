@@ -23,6 +23,7 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
                 SELECT
                     i.id AS invoiceId,
                     i.invoice_code AS invoiceCode,
+                    i.dish_order_id AS dishOrderId,
                     dt.id AS tableId,
                     dt.table_code AS tableCode,
                     dt.table_name AS tableName,
@@ -34,6 +35,9 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
                     i.guest_count AS guestCount,
                     i.total_amount AS totalMoney,
                     i.created_at AS createdTime,
+                    i.booking_id AS bookingId,
+                    i.customer_name AS customerName,
+                    i.customer_phone AS customerPhone,
                     idt.id AS invoiceDetailId,
                     d.id AS dishId,
                     d.dish_code AS dishCode,
@@ -69,6 +73,7 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
         return InvoiceDetailNativeResultDTO.builder()
                 .invoiceId(NativeSqlTupleUtils.getInteger(tuple, "invoiceId"))
                 .invoiceCode(NativeSqlTupleUtils.getString(tuple, "invoiceCode"))
+                .dishOrderId(NativeSqlTupleUtils.getLong(tuple, "dishOrderId"))
                 .tableId(NativeSqlTupleUtils.getInteger(tuple, "tableId"))
                 .tableCode(NativeSqlTupleUtils.getString(tuple, "tableCode"))
                 .tableName(NativeSqlTupleUtils.getString(tuple, "tableName"))
@@ -80,6 +85,9 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
                 .guestCount(NativeSqlTupleUtils.getInteger(tuple, "guestCount"))
                 .totalMoney(NativeSqlTupleUtils.getBigDecimal(tuple, "totalMoney"))
                 .createdTime(NativeSqlTupleUtils.getInstant(tuple, "createdTime"))
+                .bookingId(NativeSqlTupleUtils.getInteger(tuple, "bookingId"))
+                .customerName(NativeSqlTupleUtils.getString(tuple, "customerName"))
+                .customerPhone(NativeSqlTupleUtils.getString(tuple, "customerPhone"))
                 .invoiceDetailId(NativeSqlTupleUtils.getInteger(tuple, "invoiceDetailId"))
                 .dishId(NativeSqlTupleUtils.getInteger(tuple, "dishId"))
                 .dishCode(NativeSqlTupleUtils.getString(tuple, "dishCode"))

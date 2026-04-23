@@ -27,12 +27,15 @@ public abstract class InvoiceMapper {
     @Mapping(target = "invoiceCode", ignore = true)
     @Mapping(target = "account", ignore = true)
     @Mapping(target = "table", ignore = true)
+    @Mapping(target = "dishOrder", ignore = true)
+    @Mapping(target = "booking", ignore = true)
     @Mapping(target = "createdTime", ignore = true)
     @Mapping(target = "active", ignore = true)
     @Mapping(target = "totalGuest", source = "guestCount")
     public abstract Invoice toNewEntity(InvoiceCreateRequestDTO request);
 
     @Mapping(target = "invoiceId", source = "id")
+    @Mapping(target = "dishOrderId", source = "dishOrder.id")
     @Mapping(target = "tableId", source = "table.id")
     @Mapping(target = "tableCode", source = "table.tableCode")
     @Mapping(target = "tableName", source = "table.tableName")
@@ -42,6 +45,7 @@ public abstract class InvoiceMapper {
     @Mapping(target = "paymentStatusName", source = "paymentStatus", qualifiedByName = "toPaymentStatusName")
     @Mapping(target = "paymentMethodName", source = "paymentMethod", qualifiedByName = "toPaymentMethodName")
     @Mapping(target = "guestCount", source = "totalGuest")
+    @Mapping(target = "bookingId", source = "booking.id")
     public abstract InvoiceResponseDTO toResponseDTO(Invoice entity);
 
     public InvoiceConfirmPaymentResponseDTO toConfirmPaymentResponseDTO(Invoice entity) {
@@ -74,6 +78,7 @@ public abstract class InvoiceMapper {
         return InvoiceDetailResponseDTO.builder()
                 .invoiceId(first.getInvoiceId())
                 .invoiceCode(first.getInvoiceCode())
+                .dishOrderId(first.getDishOrderId())
                 .tableId(first.getTableId())
                 .tableCode(first.getTableCode())
                 .tableName(first.getTableName())
@@ -87,6 +92,9 @@ public abstract class InvoiceMapper {
                 .guestCount(first.getGuestCount())
                 .totalMoney(first.getTotalMoney())
                 .createdTime(first.getCreatedTime())
+                .bookingId(first.getBookingId())
+                .customerName(first.getCustomerName())
+                .customerPhone(first.getCustomerPhone())
                 .invoiceDetails(lineItems)
                 .build();
     }

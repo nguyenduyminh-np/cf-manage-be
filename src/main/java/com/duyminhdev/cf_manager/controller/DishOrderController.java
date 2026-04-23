@@ -2,6 +2,7 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
@@ -24,12 +25,47 @@ public class DishOrderController {
 
     private final DishOrderService dishOrderService;
 
+    /**
+     * Nhân viên phục vụ sử dụng ứng dụng để ghi nhận các món ăn/đồ uống mà khách yêu cầu tại một bàn cụ thể.
+     * Hệ thống sẽ lưu đơn hàng với trạng thái "Đang chế biến" và tính toán tổng tiền dựa trên số lượng và đơn giá hiện tại.
+     */
+    @PostMapping("/create")
+    public ApiResponse<DishOrderResponseDTO> create(
+            @Valid @RequestBody DishOrderCreateRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "CREATE_DISH_ORDER_SUCCESS", dishOrderService.create(request));
+    }
+
+    /**
+     * Trong quá trình phục vụ,nhân viên có thể cần thay đổi danh sách món đã gọi (thêm, bớt, sửa số lượng), chuyển bàn cho khách,
+     * hoặc thay đổi trạng thái đơn hàng.
+     * Hệ thống cho phép cập nhật toàn bộ đơn hàng và tự động tính lại tổng tiền.
+     */
+    @PostMapping("/update")
+    public ApiResponse<DishOrderResponseDTO> update(
+            @Valid @RequestBody DishOrderUpdateRequestDTO request
+    ) {
+        /**
+         * Flow API dish order update:
+         * 1. Nhan dishOrderId va du lieu cap nhat
+         * 2. Goi service cap nhat order + detail
+         * 3. Tra ket qua sau cap nhat
+         */
+        return new ApiResponse<>(200, "UPDATE_DISH_ORDER_SUCCESS", dishOrderService.update(request));
+    }
 
     @PostMapping("/order-history")
     public ApiResponse<PageResponse<List<OrderHistoryResponseDTO>>> searchOrderHistoryByTable(
             @Valid @RequestBody OrderHistorySearchRequestDTO request
     ) {
         return new ApiResponse<>(200, "SEARCH_DISH_ORDER_HISTORY_SUCCESS", dishOrderService.searchOrderHistoryByTable(request));
+    }
+
+    @PostMapping("/dishes-for-pos-order-dishes")
+    public ApiResponse<PageResponse<List<DishSearchNativeResultDTO>>> searchDishesForPosOrderDishes(
+            @Valid @RequestBody DishSearchRequestDTO request
+    ) {
+        return new ApiResponse<>(200, "SEARCH_DISHES_FOR_POS_ORDER_DISHES_SUCCESS", dishOrderService.searchDishesForPosOrderDishes(request));
     }
 
     /**
@@ -49,50 +85,12 @@ public class DishOrderController {
     }
 
     /**
-     * Tao order mon moi cho ban.
-     */
-    @PostMapping("/create")
-    public ApiResponse<DishOrderResponseDTO> create(
-            @Valid @RequestBody DishOrderCreateRequestDTO request
-    ) {
-        /**
-         * Flow API dish order create:
-         * 1. Nhan header order va danh sach mon
-         * 2. Goi service tao order va detail
-         * 3. Tra order da tao
-         */
-        return new ApiResponse<>(200, "CREATE_DISH_ORDER_SUCCESS", dishOrderService.create(request));
-    }
-
-    /**
-     * Cap nhat order mon hien co.
-     */
-    @PostMapping("/update")
-    public ApiResponse<DishOrderResponseDTO> update(
-            @Valid @RequestBody DishOrderUpdateRequestDTO request
-    ) {
-        /**
-         * Flow API dish order update:
-         * 1. Nhan dishOrderId va du lieu cap nhat
-         * 2. Goi service cap nhat order + detail
-         * 3. Tra ket qua sau cap nhat
-         */
-        return new ApiResponse<>(200, "UPDATE_DISH_ORDER_SUCCESS", dishOrderService.update(request));
-    }
-
-    /**
      * Cap nhat trang thai order mon.
      */
     @PostMapping("/update-status")
     public ApiResponse<Boolean> updateStatus(
             @Valid @RequestBody DishOrderStatusUpdateRequestDTO request
     ) {
-        /**
-         * Flow API dish order update-status:
-         * 1. Nhan dishOrderId va status moi
-         * 2. Goi service doi status order
-         * 3. Tra ket qua cho FE
-         */
         return new ApiResponse<>(200, "UPDATE_DISH_ORDER_STATUS_SUCCESS", dishOrderService.updateStatus(request));
     }
 }

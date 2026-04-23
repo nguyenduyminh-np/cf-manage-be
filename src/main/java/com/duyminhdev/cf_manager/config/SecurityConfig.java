@@ -39,6 +39,7 @@ public class SecurityConfig {
             "/api/v1/auth/refresh",
             "/api/v1/auth/logout",
             "/public/**",
+            "/images/**",
             "/error"
     };
 

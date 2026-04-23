@@ -24,6 +24,9 @@ public class DishOrder {
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
     private Boolean active = true;
 
+    @Column(name = "total_bill", precision = 18, scale = 2)
+    private BigDecimal totalBill;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dish_order_status_id", nullable = false, foreignKey = @ForeignKey(name = "fk_dish_order_dish_order_status_id"))
     private DishOrderStatus status;

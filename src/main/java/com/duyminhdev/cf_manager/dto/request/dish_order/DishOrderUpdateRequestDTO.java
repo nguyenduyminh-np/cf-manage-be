@@ -25,6 +25,8 @@ public class DishOrderUpdateRequestDTO {
 
     @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã trạng thái đơn gọi món không hợp lệ")
     private String dishOrderStatus;
+    private Integer accountId;
+    private String description;
 
     @NotEmpty(message = "Danh sách món ăn không được để rỗng")
     @Valid

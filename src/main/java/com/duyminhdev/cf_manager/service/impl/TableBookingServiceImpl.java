@@ -399,7 +399,12 @@ public class TableBookingServiceImpl implements TableBookingService {
     @Override
     @Transactional
     public void delete(Integer bookingId) {
+        TableBooking booking = tableBookingRepository.findById(bookingId)
+                .orElseThrow(() -> new InvalidDataException("Booking not found"));
+
+        Integer tableId = booking.getTable().getId();
         tableBookingRepository.deleteById(bookingId);
+        serviceSupport.recomputeAndSyncTableStatus(tableId);
     }
 
     private List<TableBookingAvailableSlotResponseDTO> buildAvailableSlots(

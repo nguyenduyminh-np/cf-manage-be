@@ -47,7 +47,7 @@ public class NativeSqlDishOrderDetailRepositoryImpl implements NativeSqlDishOrde
                   AND (do1.is_active = 1 OR do1.is_active = true)
                   AND (dod.is_active = 1 OR dod.is_active = true)
                   AND (d.is_active = 1 OR d.is_active = true)
-                                    AND UPPER(dos.dish_order_status_code) NOT IN ('CANCEL', 'DONE')
+                                    AND UPPER(dos.dish_order_status_code) NOT IN ('CANCEL', 'PAID')
                 GROUP BY
                     d.id,
                     d.dish_code,

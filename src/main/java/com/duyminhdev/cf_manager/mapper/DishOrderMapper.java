@@ -10,14 +10,12 @@ public interface DishOrderMapper {
 
     @Mapping(target = "dishOrderId", source = "id")
     @Mapping(target = "tableId", source = "table.id")
-    @Mapping(target = "tableCode", source = "table.tableCode")
-    @Mapping(target = "tableName", source = "table.tableName")
     @Mapping(target = "accountId", source = "account.id")
-    @Mapping(target = "accountUsername", source = "account.username")
-    @Mapping(target = "accountFullName", source = "account.fullName")
+    @Mapping(target = "accountName", source = "account.fullName")
     @Mapping(target = "dishOrderStatusId", source = "status.id")
-    @Mapping(target = "dishOrderStatus", source = "status.dishOrderStatusCode")
     @Mapping(target = "dishOrderStatusName", source = "status.dishOrderStatusCode", qualifiedByName = "toDishOrderStatusName")
+    @Mapping(target = "totalBill", source = "totalBill")   //
+    @Mapping(target = "dishOrderDetails", ignore = true)
     DishOrderResponseDTO toResponseDTO(DishOrder entity);
 }
 

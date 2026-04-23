@@ -1,14 +1,18 @@
 package com.duyminhdev.cf_manager.service;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
-import jakarta.validation.Valid;
+import com.duyminhdev.cf_manager.dto.response.payment.PaymentPreviewResponseDTO;
 
 import java.util.List;
 
 public interface DishOrderService {
+
+    // Lấy thông tin để thanh toán
+    PaymentPreviewResponseDTO getPaymentPreview(Integer orderId);
 
     /**
      * Lấy danh sách order của một bàn theo thời gian tạo giảm dần.
@@ -31,4 +35,6 @@ public interface DishOrderService {
     Boolean updateStatus(DishOrderStatusUpdateRequestDTO request);
 
     PageResponse<List<OrderHistoryResponseDTO>> searchOrderHistoryByTable(OrderHistorySearchRequestDTO request);
+
+    PageResponse<List<DishSearchNativeResultDTO>> searchDishesForPosOrderDishes(DishSearchRequestDTO request);
 }

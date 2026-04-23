@@ -11,12 +11,47 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookingRepository {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Override
+    public Optional<TableBookingDetailNativeResultDTO> findActiveBookingByTableId(Integer tableId) {
+        String sql = """
+        SELECT
+            tb.id AS bookingId,
+            tb.customer_name AS customerName,
+            tb.phone_number AS phoneNumber,
+            dt.slot AS tableSlot
+        FROM table_booking tb
+        INNER JOIN dining_table dt ON dt.id = tb.dining_table_id
+        WHERE tb.dining_table_id = :tableId
+          AND tb.is_active = 1
+          AND tb.booking_status IN ('CONFIRMED', 'CHECKED_IN')
+          AND tb.expected_arrive_time <= NOW()
+          AND tb.check_out_at IS NULL
+        ORDER BY tb.expected_arrive_time DESC
+        LIMIT 1
+        """;
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        query.setParameter("tableId", tableId);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+        if(tuples.isEmpty()){
+            return Optional.empty();
+        }
+        Tuple tuple = tuples.get(0);
+        return Optional.of(TableBookingDetailNativeResultDTO.builder()
+                .bookingId(NativeSqlTupleUtils.getInteger(tuple, "bookingId"))
+                .customerName(NativeSqlTupleUtils.getString(tuple, "customerName"))
+                .phoneNumber(NativeSqlTupleUtils.getString(tuple, "phoneNumber"))
+                .build());
+    }
 
     @Override
     public TableBookingDetailNativeResultDTO findBookingDetailByBookingId(Integer bookingId) {

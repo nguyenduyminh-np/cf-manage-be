@@ -17,6 +17,10 @@ public class InvoiceCreateRequestDTO {
     @Positive(message = "Mã bàn phải lớn hơn 0")
     private Integer tableId;
 
+    @NotNull(message = "Mã đơn đặt món không được để trống")
+    @Positive(message = "Mã đơn đặt món phải lớn hơn 0")
+    private Long dishOrderId;
+
     @Pattern(regexp = ValidateValueConstants.BUSINESS_CODE, message = "Mã phương thức thanh toán không hợp lệ")
     private String paymentMethod;
 
@@ -29,6 +33,15 @@ public class InvoiceCreateRequestDTO {
 
     @Positive(message = "Số lượng khách phải lớn hơn 0")
     private Integer guestCount = 1;
+
+    @Positive(message = "Mã đặt bàn phải lớn hơn 0")
+    private Integer bookingId;
+
+    @Size(max = 255, message = "Tên khách không được vượt quá 255 ký tự")
+    private String customerName;
+
+    @Size(max = 20, message = "Số điện thoại không được vượt quá 20 ký tự")
+    private String customerPhone;
 
     @NotEmpty(message = "Danh sách chi tiết hóa đơn không được để rỗng")
     @Valid
