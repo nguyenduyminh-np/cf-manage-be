@@ -8,7 +8,7 @@ import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
 import com.duyminhdev.cf_manager.event.booking.BookingDomainEventPublisher;
 import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
 import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
-import com.duyminhdev.cf_manager.repository.NativeSqlTableBookingRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.service.booking.BookingUseCaseService;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
@@ -22,7 +22,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 

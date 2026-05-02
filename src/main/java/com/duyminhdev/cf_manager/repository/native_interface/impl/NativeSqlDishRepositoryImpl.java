@@ -1,8 +1,8 @@
-package com.duyminhdev.cf_manager.repository.impl;
+package com.duyminhdev.cf_manager.repository.native_interface.impl;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.dish_order.DishSearchRequestDTO;
-import com.duyminhdev.cf_manager.repository.NativeSqlDishRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlDishRepository;
 import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import com.duyminhdev.cf_manager.utils.PageUtils;
 import jakarta.persistence.EntityManager;

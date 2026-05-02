@@ -15,6 +15,7 @@ import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingStatusUpd
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingExportDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -30,6 +31,11 @@ public interface TableBookingService {
      * Tìm kiếm lịch sử đặt bàn theo bộ lọc và phân trang.
      */
     PageResponse<List<TableBookingResponseDTO>> search(TableBookingSearchRequestDTO request);
+
+    /**
+     * Xuất danh sách đặt bàn theo cùng nguồn dữ liệu với search.
+     */
+    List<TableBookingExportDTO> exportData(TableBookingSearchRequestDTO request);
 
     /**
      * Tạo mới một booking cho bàn và đồng bộ trạng thái bàn.

@@ -1,10 +1,10 @@
-package com.duyminhdev.cf_manager.repository.impl;
+package com.duyminhdev.cf_manager.repository.native_interface.impl;
 
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResult;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceSearchNativeResult;
 import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceSearchRequestDTO;
-import com.duyminhdev.cf_manager.repository.NativeSqlInvoiceRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlInvoiceRepository;
 import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;

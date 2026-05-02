@@ -2,19 +2,20 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
-import com.duyminhdev.cf_manager.dto.request.dish.DishListRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.dish.DishSearchRequestDTO;
-import com.duyminhdev.cf_manager.dto.response.dish.DishResponseDTO;
+import com.duyminhdev.cf_manager.dto.request.dish.*;
+import com.duyminhdev.cf_manager.dto.response.dish.*;
+import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.DishService;
+import com.duyminhdev.cf_manager.utils.ExcelUtils;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/dish")
@@ -24,37 +25,59 @@ public class DishController {
 
     private final DishService dishService;
 
-    /**
-     * Lay danh sach mon, cho phep body optional.
-     */
-    @PostMapping("/list")
-    public ApiResponse<List<DishResponseDTO>> list(
-            @RequestBody(required = false) DishListRequestDTO request
-    ) {
-        /**
-         * Flow API dish list:
-         * 1. Nhan request list mon (co the null)
-         * 2. Neu null thi tao request mac dinh
-         * 3. Goi service lay danh sach mon
-         * 4. Tra ket qua danh sach cho FE
-         */
-        DishListRequestDTO safeRequest = request != null ? request : new DishListRequestDTO();
-        return new ApiResponse<>(200, "GET_DISH_LIST_SUCCESS", dishService.getAll(safeRequest));
-    }
+    // @PostMapping("/list")
+    // public ApiResponse<List<DishResponseDTO>> list(
+    //         @RequestBody(required = false) DishListRequestDTO request) {
+    //     DishListRequestDTO safeRequest = request != null ? request : new DishListRequestDTO();
+    //     return new ApiResponse<>(200, "GET_DISH_LIST_SUCCESS", dishService.getAll(safeRequest));
+    // }
 
-    /**
-     * Tim kiem mon theo bo loc va phan trang.
-     */
     @PostMapping("/search")
     public ApiResponse<PageResponse<List<DishResponseDTO>>> search(
-            @Valid @RequestBody DishSearchRequestDTO request
-    ) {
-        /**
-         * Flow API dish search:
-         * 1. Nhan bo loc tim kiem mon
-         * 2. Goi service search co phan trang
-         * 3. Tra page result cho FE
-         */
+            @Valid @RequestBody DishSearchRequestDTO request) {
         return new ApiResponse<>(200, "SEARCH_DISH_SUCCESS", dishService.search(request));
+    }
+
+    @PostMapping("/export")
+    public void exportExcel(@Valid @RequestBody DishSearchRequestDTO request,
+                            HttpServletResponse response) throws IOException {
+        List<DishExportDTO> items = dishService.exportData(request);
+
+        String fileName = "DANH_SACH_MON_AN_" + System.currentTimeMillis() + ".xlsx";
+
+        // Tiêu đề hiển thị trong Excel
+        String title = "DANH SÁCH MÓN ĂN";
+
+        ExcelUtils.export(response, DishExportDTO.class, items, fileName, title);
+    }
+
+    @PostMapping("/create")
+    public ApiResponse<DishDetailResponseDTO> create(
+            @Valid @RequestBody DishCreateRequestDTO request) {
+        DishDetailResponseDTO dto = dishService.create(request);
+        return new ApiResponse<>(201, "CREATE_DISH_SUCCESS", dto);
+    }
+
+    @PostMapping("/update")
+    public ApiResponse<DishDetailResponseDTO> update(
+            @Valid @RequestBody DishUpdateRequestDTO request) {
+        DishDetailResponseDTO dto = dishService.update(request);
+        return new ApiResponse<>(200, "UPDATE_DISH_SUCCESS", dto);
+    }
+
+    @PostMapping("/delete")
+    public ApiResponse<Void> delete(@RequestBody Map<String, Integer> body) {
+        Integer id = body.get("id");
+        if (id == null) throw new InvalidDataException("id is required");
+        dishService.delete(id);
+        return new ApiResponse<>(200, "DELETE_DISH_SUCCESS");
+    }
+
+    @PostMapping("/detail")
+    public ApiResponse<DishDetailResponseDTO> detail(@RequestBody Map<String, Integer> body) {
+        Integer id = body.get("id");
+        if (id == null) throw new InvalidDataException("id is required");
+        DishDetailResponseDTO dto = dishService.getDetail(id);
+        return new ApiResponse<>(200, "GET_DISH_DETAIL_SUCCESS", dto);
     }
 }

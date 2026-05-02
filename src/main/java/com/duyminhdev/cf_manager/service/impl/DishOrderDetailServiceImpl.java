@@ -6,7 +6,7 @@ import com.duyminhdev.cf_manager.dto.response.dish_order_detail.DishGroupedByTab
 import com.duyminhdev.cf_manager.dto.response.dish_order_detail.DishOrderDetailResponseDTO;
 import com.duyminhdev.cf_manager.mapper.DishOrderDetailMapper;
 import com.duyminhdev.cf_manager.repository.DishOrderDetailRepository;
-import com.duyminhdev.cf_manager.repository.NativeSqlDishOrderDetailRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlDishOrderDetailRepository;
 import com.duyminhdev.cf_manager.service.DishOrderDetailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

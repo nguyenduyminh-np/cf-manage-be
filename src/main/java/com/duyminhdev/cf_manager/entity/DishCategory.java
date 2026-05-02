@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "dish_category")
@@ -25,4 +27,7 @@ public class DishCategory {
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "tinyint(1) DEFAULT 1")
     private Boolean active = true;
+
+    @OneToMany(mappedBy = "dishCategory", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Dish> dishes = new LinkedHashSet<>();
 }

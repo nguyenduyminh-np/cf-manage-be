@@ -6,19 +6,19 @@ import com.duyminhdev.cf_manager.dto.db_result.native_sql.OrderHistoryNativeResu
 import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderDetailsDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryExportDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.payment.*;
 import com.duyminhdev.cf_manager.entity.*;
 import com.duyminhdev.cf_manager.enums.DishOrderStatusCodeEnum;
 import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
-import com.duyminhdev.cf_manager.mapper.DishOrderDetailMapper;
 import com.duyminhdev.cf_manager.mapper.DishOrderMapper;
 import com.duyminhdev.cf_manager.repository.DishOrderDetailRepository;
 import com.duyminhdev.cf_manager.repository.DishOrderRepository;
-import com.duyminhdev.cf_manager.repository.NativeSqlDishRepository;
-import com.duyminhdev.cf_manager.repository.NativeSqlTableBookingRepository;
-import com.duyminhdev.cf_manager.repository.impl.NativeSqlOrderHistoryRepositoryImpl;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlDishRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.impl.NativeSqlOrderHistoryRepositoryImpl;
 import com.duyminhdev.cf_manager.service.DishOrderService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -351,6 +353,27 @@ public class DishOrderServiceImpl implements DishOrderService {
         response.setTotalPages(pageResult.getTotalPages());
 
         return response;
+    }
+
+    @Override
+    public List<OrderHistoryExportDTO> exportOrderHistoryByTable(OrderHistorySearchRequestDTO request) {
+        List<OrderHistoryNativeResultDTO> rows = nativeSqlOrderHistoryRepository.searchAll(request);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
+                .withZone(ZoneId.systemDefault());
+
+        return rows.stream()
+                .map(row -> OrderHistoryExportDTO.builder()
+                        .dishOrderId(row.getDishOrderId())
+                        .tableName(row.getTableName())
+                        .employeeName(row.getEmployeeName())
+                        .orderStatus(row.getOrderStatus())
+                        .dishOrderStatusCode(row.getDishOrderStatusCode())
+                        .createdAt(row.getCreatedAt() != null ? formatter.format(row.getCreatedAt()) : null)
+                        .note(row.getNote())
+                        .totalQuantity(row.getTotalQuantity())
+                        .totalAmount(row.getTotalAmount())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Override

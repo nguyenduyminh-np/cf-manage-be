@@ -16,6 +16,7 @@ import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingStatusUpd
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingExportDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
 import com.duyminhdev.cf_manager.entity.TableBooking;
 import com.duyminhdev.cf_manager.entity.TableEntity;
@@ -25,7 +26,7 @@ import com.duyminhdev.cf_manager.event.booking.BookingMutationType;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
 import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
-import com.duyminhdev.cf_manager.repository.NativeSqlTableBookingRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.spec.TableBookingSpec;
 import com.duyminhdev.cf_manager.service.booking.BookingUseCaseService;
@@ -38,13 +39,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -127,6 +131,51 @@ public class TableBookingServiceImpl implements TableBookingService {
         return response;
     }
 
+        @Override
+        public List<TableBookingExportDTO> exportData(TableBookingSearchRequestDTO request) {
+        TableBookingSearchRequestDTO safeRequest = normalizeSearchRequest(request);
+
+        String resolvedSortField = resolveSortFieldOrDefault(safeRequest.getSortField());
+        String resolvedSortDir = resolveSortDirOrDefault(safeRequest.getSortDir());
+
+        List<TableBooking> bookings = tableBookingRepository.findAll(
+            TableBookingSpec.byCriteria(safeRequest),
+            TableBookingSpec.resolveSort(resolvedSortField, resolvedSortDir)
+        );
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
+            .withZone(ZoneId.systemDefault());
+
+        return bookings.stream()
+            .map(booking -> TableBookingExportDTO.builder()
+                .bookingId(booking.getId())
+                .bookingInvoiceCode(booking.getBookingInvoiceCode())
+                .tableId(booking.getTable() != null ? booking.getTable().getId() : null)
+                .tableCode(booking.getTable() != null ? booking.getTable().getTableCode() : null)
+                .tableName(booking.getTable() != null ? booking.getTable().getTableName() : null)
+                .expectedArriveTime(booking.getExpectedArriveTime() != null ? formatter.format(booking.getExpectedArriveTime()) : null)
+                .checkInAt(booking.getCheckInAt() != null ? formatter.format(booking.getCheckInAt()) : null)
+                .expectedCheckOut(booking.getExpectedCheckOut() != null ? formatter.format(booking.getExpectedCheckOut()) : null)
+                .checkOutAt(booking.getCheckOutAt() != null ? formatter.format(booking.getCheckOutAt()) : null)
+                .bookingStatus(booking.getBookingStatus())
+                .bookingStatusName(resolveBookingStatusLabel(booking.getBookingStatus()))
+                .customerName(booking.getCustomerName())
+                .phoneNumber(booking.getPhoneNumber())
+                .depositAmount(booking.getDepositAmount())
+                .depositPaid(booking.getDepositPaid())
+                .depositPaidAt(booking.getDepositPaidAt() != null ? formatter.format(booking.getDepositPaidAt()) : null)
+                .depositForfeited(booking.getDepositForfeited())
+                .depositTxnRef(booking.getDepositTxnRef())
+                .note(booking.getNote())
+                .accountId(booking.getAccount() != null ? booking.getAccount().getId() : null)
+                .accountUsername(booking.getAccount() != null ? booking.getAccount().getUsername() : null)
+                .accountFullName(booking.getAccount() != null ? booking.getAccount().getFullName() : null)
+                .active(booking.getActive())
+                .createdAt(booking.getCreatedAt() != null ? formatter.format(booking.getCreatedAt()) : null)
+                .build())
+            .collect(Collectors.toList());
+        }
+
     private TableBookingSearchRequestDTO normalizeSearchRequest(TableBookingSearchRequestDTO request) {
         TableBookingSearchRequestDTO safeRequest =
                 request != null ? request : new TableBookingSearchRequestDTO();
@@ -157,6 +206,17 @@ public class TableBookingServiceImpl implements TableBookingService {
             return null;
         }
         return value.trim();
+    }
+
+    private String resolveBookingStatusLabel(String bookingStatus) {
+        if (!StringUtils.hasText(bookingStatus)) {
+            return null;
+        }
+        try {
+            return BookingStatusEnum.fromCode(bookingStatus).getLabel();
+        } catch (Exception ex) {
+            return bookingStatus;
+        }
     }
 
     @Override

@@ -1,4 +1,4 @@
-package com.duyminhdev.cf_manager.repository;
+package com.duyminhdev.cf_manager.repository.native_interface;
 
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResult;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;

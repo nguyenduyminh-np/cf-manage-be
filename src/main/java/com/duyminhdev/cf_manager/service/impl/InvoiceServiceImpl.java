@@ -20,6 +20,8 @@ import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.mapper.InvoiceDetailPayloadMapper;
 import com.duyminhdev.cf_manager.mapper.InvoiceMapper;
 import com.duyminhdev.cf_manager.repository.*;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlDishOrderDetailRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlInvoiceRepository;
 import com.duyminhdev.cf_manager.service.InvoiceService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -79,6 +82,30 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setTotalElements((int) total);
         response.setTotalPages((int) Math.ceil((double) total / limit));
         return response;
+    }
+
+    @Override
+    public List<InvoiceExportDTO> exportData(InvoiceSearchRequestDTO request) {
+        long total = nativeSqlInvoiceRepository.countInvoices(request);
+        if (total <= 0) {
+            return List.of();
+        }
+
+        List<InvoiceSearchNativeResult> rows = nativeSqlInvoiceRepository.searchInvoices(request, 0, (int) total);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
+                .withZone(ZoneId.systemDefault());
+
+        return rows.stream()
+                .map(r -> InvoiceExportDTO.builder()
+                        .invoiceCode(r.getInvoiceCode())
+                        .totalAmount(r.getTotalAmount())
+                        .paymentStatus(r.getPaymentStatus())
+                        .paymentMethod(r.getPaymentMethod())
+                        .createdAt(r.getCreatedAt() != null ? formatter.format(r.getCreatedAt()) : null)
+                        .fullName(r.getFullName())
+                        .bookingInvoiceCode(r.getBookingInvoiceCode())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Override

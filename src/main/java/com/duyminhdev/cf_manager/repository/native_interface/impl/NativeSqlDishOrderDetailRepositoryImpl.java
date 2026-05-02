@@ -1,7 +1,7 @@
-package com.duyminhdev.cf_manager.repository.impl;
+package com.duyminhdev.cf_manager.repository.native_interface.impl;
 
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
-import com.duyminhdev.cf_manager.repository.NativeSqlDishOrderDetailRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlDishOrderDetailRepository;
 import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;

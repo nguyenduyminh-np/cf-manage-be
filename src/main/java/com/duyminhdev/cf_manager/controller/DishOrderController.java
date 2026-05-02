@@ -5,9 +5,12 @@ import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.dish_order.*;
 import com.duyminhdev.cf_manager.dto.response.dish_order.DishOrderResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryExportDTO;
 import com.duyminhdev.cf_manager.dto.response.dish_order.OrderHistoryResponseDTO;
 import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.DishOrderService;
+import com.duyminhdev.cf_manager.utils.ExcelUtils;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -59,6 +63,17 @@ public class DishOrderController {
             @Valid @RequestBody OrderHistorySearchRequestDTO request
     ) {
         return new ApiResponse<>(200, "SEARCH_DISH_ORDER_HISTORY_SUCCESS", dishOrderService.searchOrderHistoryByTable(request));
+    }
+
+    @PostMapping("/order-history/export")
+    public void exportOrderHistoryByTable(@Valid @RequestBody OrderHistorySearchRequestDTO request,
+                                          HttpServletResponse response) throws IOException {
+        List<OrderHistoryExportDTO> items = dishOrderService.exportOrderHistoryByTable(request);
+
+        String fileName = "DANH_SACH_LICH_SU_ORDER_MON_" + System.currentTimeMillis() + ".xlsx";
+        String title = "DANH SÁCH LỊCH SỬ ORDER MÓN";
+
+        ExcelUtils.export(response, OrderHistoryExportDTO.class, items, fileName, title);
     }
 
     @PostMapping("/dishes-for-pos-order-dishes")

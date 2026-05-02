@@ -9,6 +9,7 @@ import java.util.List;
 public interface InvoiceService {
 
     PageResponse<List<InvoiceListItemDTO>> search(InvoiceSearchRequestDTO request);
+    List<InvoiceExportDTO> exportData(InvoiceSearchRequestDTO request);
     InvoiceDetailResponseDTO getDetail(Integer invoiceId);
     /**
      * Đếm số invoice theo ngày và trả về mã hóa đơn kế tiếp.

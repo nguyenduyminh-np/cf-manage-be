@@ -1,4 +1,4 @@
-package com.duyminhdev.cf_manager.repository;
+package com.duyminhdev.cf_manager.repository.native_interface;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableAvailableNativeResultDTO;
@@ -11,6 +11,7 @@ import java.util.List;
 public interface NativeSqlTableRepository {
 
     PageResponse<List<TableSearchNativeResultDTO>> search(TableSearchRequestDTO request);
+    List<TableSearchNativeResultDTO> searchAll(TableSearchRequestDTO request);
 
     List<TableAvailableNativeResultDTO> findAvailableTables(TableAvailableSearchRequestDTO request);
 }

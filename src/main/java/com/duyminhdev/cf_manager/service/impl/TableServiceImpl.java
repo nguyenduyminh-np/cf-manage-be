@@ -3,10 +3,14 @@ package com.duyminhdev.cf_manager.service.impl;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableAvailableNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableCreateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableAvailableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableDetailRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableListRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.table.TableUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableStatusUpdateRequestDTO;
+import com.duyminhdev.cf_manager.dto.response.table.TableExportDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableAvailableResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableDetailResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table.TableSearchResponseDTO;
@@ -14,15 +18,21 @@ import com.duyminhdev.cf_manager.entity.TableEntity;
 import com.duyminhdev.cf_manager.enums.TableStatusEnum;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.mapper.TableMapper;
-import com.duyminhdev.cf_manager.repository.NativeSqlTableRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableRepository;
 import com.duyminhdev.cf_manager.repository.TableRepository;
 import com.duyminhdev.cf_manager.service.TableService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Sort;
+import org.springframework.util.StringUtils;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +42,22 @@ public class TableServiceImpl implements TableService {
     private final TableRepository tableRepository;
     private final TableMapper tableMapper;
     private final ServiceSupport serviceSupport;
+
+    @Override
+    public List<TableSearchResponseDTO> list(TableListRequestDTO request) {
+        TableListRequestDTO safeRequest = request != null ? request : new TableListRequestDTO();
+
+        List<TableEntity> tables;
+        if (safeRequest.getActive() == null || safeRequest.getActive()) {
+            tables = tableRepository.findAllByActiveTrueOrderByFloorAscSlotAscIdAsc();
+        } else {
+            tables = tableRepository.findAll(Sort.by(Sort.Direction.ASC, "floor", "slot", "id"));
+        }
+
+        return tables.stream()
+                .map(tableMapper::toSearchResponseDTO)
+                .toList();
+    }
 
     @Override
     /**
@@ -58,6 +84,28 @@ public class TableServiceImpl implements TableService {
         response.setTotalPages(pageResult.getTotalPages());
         return response;
     }
+
+        @Override
+        public List<TableExportDTO> exportData(TableSearchRequestDTO request) {
+        List<TableSearchNativeResultDTO> rows = nativeSqlTableRepository.searchAll(request);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
+            .withZone(ZoneId.systemDefault());
+
+        return rows.stream()
+            .map(row -> TableExportDTO.builder()
+                .tableId(row.getTableId())
+                .tableCode(row.getTableCode())
+                .tableName(row.getTableName())
+                .tableStatus(row.getTableStatus())
+                .tableStatusName(TableStatusEnum.fromCode(row.getTableStatus()).getLabel())
+                .floor(row.getFloor())
+                .slot(row.getSlot())
+                .totalBooking(row.getTotalBooking())
+                .lastBookingTime(row.getLastBookingTime() != null ? formatter.format(row.getLastBookingTime()) : null)
+                .active(Boolean.TRUE.equals(row.getActive()) ? "Hoạt động" : "Không hoạt động")
+                .build())
+            .collect(Collectors.toList());
+        }
 
     @Override
     /**
@@ -108,5 +156,64 @@ public class TableServiceImpl implements TableService {
         table.setTableStatus(TableStatusEnum.fromCode(request.getTableStatus()).getCode());
         tableRepository.save(table);
         return true;
+    }
+
+    @Override
+    @Transactional
+    public TableDetailResponseDTO create(TableCreateRequestDTO request) {
+        TableEntity table = new TableEntity();
+        table.setTableCode(request.getTableCode());
+        table.setTableName(request.getTableName());
+        table.setFloor(request.getFloor());
+        table.setSlot(request.getSlot());
+        table.setCreatedTime(Instant.now());
+        table.setActive(true);
+
+        if (StringUtils.hasText(request.getTableStatus())) {
+            serviceSupport.validateTableStatusCode(request.getTableStatus());
+            table.setTableStatus(TableStatusEnum.fromCode(request.getTableStatus()).getCode());
+        } else {
+            table.setTableStatus(TableStatusEnum.AVAILABLE.getCode());
+        }
+
+        TableEntity saved = tableRepository.save(table);
+        return tableMapper.toDetailResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public TableDetailResponseDTO update(TableUpdateRequestDTO request) {
+        TableEntity table = serviceSupport.getActiveTable(request.getId());
+
+        if (request.getTableCode() != null) {
+            table.setTableCode(request.getTableCode());
+        }
+        if (request.getTableName() != null && !request.getTableName().isBlank()) {
+            table.setTableName(request.getTableName());
+        }
+        if (request.getFloor() != null) {
+            table.setFloor(request.getFloor());
+        }
+        if (request.getSlot() != null) {
+            table.setSlot(request.getSlot());
+        }
+        if (StringUtils.hasText(request.getTableStatus())) {
+            serviceSupport.validateTableStatusCode(request.getTableStatus());
+            table.setTableStatus(TableStatusEnum.fromCode(request.getTableStatus()).getCode());
+        }
+        if (request.getActive() != null) {
+            table.setActive(request.getActive());
+        }
+
+        TableEntity saved = tableRepository.save(table);
+        return tableMapper.toDetailResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Integer id) {
+        TableEntity table = serviceSupport.getActiveTable(id);
+        table.setActive(false);
+        tableRepository.save(table);
     }
 }

@@ -10,6 +10,7 @@ import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
 import com.duyminhdev.cf_manager.enums.PaymentStatusEnum;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.repository.*;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.service.PaymentService;
 import com.duyminhdev.cf_manager.utils.InvoiceCodeService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
@@ -18,13 +19,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor

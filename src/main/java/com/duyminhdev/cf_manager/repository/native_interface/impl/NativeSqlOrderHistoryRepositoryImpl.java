@@ -1,9 +1,9 @@
-package com.duyminhdev.cf_manager.repository.impl;
+package com.duyminhdev.cf_manager.repository.native_interface.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.OrderHistoryNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.dish_order.OrderHistorySearchRequestDTO;
-import com.duyminhdev.cf_manager.repository.NativeSqlOrderHistoryRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlOrderHistoryRepository;
 import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import com.duyminhdev.cf_manager.utils.PageUtils;
 import jakarta.persistence.EntityManager;
@@ -96,6 +96,30 @@ public class NativeSqlOrderHistoryRepositoryImpl implements NativeSqlOrderHistor
         response.setTotalElements((int) totalElements);
         response.setTotalPages(totalPages);
         return response;
+    }
+
+    public List<OrderHistoryNativeResultDTO> searchAll(OrderHistorySearchRequestDTO request) {
+        OrderHistorySearchRequestDTO safeRequest = request != null ? request : new OrderHistorySearchRequestDTO();
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        String whereClause = buildWhereClause(safeRequest, params);
+        String orderBy = buildOrderBy(safeRequest.getSortField(), safeRequest.getSortDir());
+
+        String dataSql = SELECT_COLUMNS
+                + FROM_WHERE
+                + whereClause
+                + GROUP_BY
+                + orderBy;
+
+        Query dataQuery = entityManager.createNativeQuery(dataSql, Tuple.class);
+        bindParameters(dataQuery, params);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = dataQuery.getResultList();
+
+        return tuples.stream()
+                .map(this::mapTupleToDto)
+                .toList();
     }
 
     private long countTotalElements(OrderHistorySearchRequestDTO request) {

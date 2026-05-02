@@ -16,9 +16,12 @@ import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingStatusUpd
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingUpdateRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingExportDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
 import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.TableBookingService;
+import com.duyminhdev.cf_manager.utils.ExcelUtils;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -68,6 +72,17 @@ public class TableBookingController {
             @Valid @RequestBody TableBookingSearchRequestDTO request
     ) {
         return new ApiResponse<>(200, "SEARCH_TABLE_BOOKING_SUCCESS", tableBookingService.search(request));
+    }
+
+    @PostMapping("table-booking-history/export")
+    public void exportExcel(@Valid @RequestBody TableBookingSearchRequestDTO request,
+                            HttpServletResponse response) throws IOException {
+        List<TableBookingExportDTO> items = tableBookingService.exportData(request);
+
+        String fileName = "DANH_SACH_DAT_BAN_" + System.currentTimeMillis() + ".xlsx";
+        String title = "DANH SÁCH ĐẶT BÀN";
+
+        ExcelUtils.export(response, TableBookingExportDTO.class, items, fileName, title);
     }
 
     /**

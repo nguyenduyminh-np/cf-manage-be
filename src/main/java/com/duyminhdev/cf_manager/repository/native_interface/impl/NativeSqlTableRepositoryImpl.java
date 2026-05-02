@@ -1,4 +1,4 @@
-package com.duyminhdev.cf_manager.repository.impl;
+package com.duyminhdev.cf_manager.repository.native_interface.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableAvailableNativeResultDTO;
@@ -6,7 +6,7 @@ import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableSearchNativeResul
 import com.duyminhdev.cf_manager.dto.request.table.TableAvailableSearchRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table.TableSearchRequestDTO;
 import com.duyminhdev.cf_manager.enums.TableStatusEnum;
-import com.duyminhdev.cf_manager.repository.NativeSqlTableRepository;
+import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableRepository;
 import com.duyminhdev.cf_manager.utils.NativeSqlTupleUtils;
 import com.duyminhdev.cf_manager.utils.PageUtils;
 import jakarta.persistence.EntityManager;
@@ -110,6 +110,31 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
         response.setTotalElements((int) totalElements);
         response.setTotalPages(totalPages);
         return response;
+    }
+
+    @Override
+    public List<TableSearchNativeResultDTO> searchAll(TableSearchRequestDTO request) {
+        TableSearchRequestDTO safeRequest = request != null ? request : new TableSearchRequestDTO();
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        String whereClause = buildWhereClause(safeRequest, params);
+        String orderBy = buildOrderBy(safeRequest.getSortField(), safeRequest.getSortDir());
+
+        String dataSql = SELECT_COLUMNS
+                + FROM_WHERE
+                + whereClause
+                + GROUP_BY
+                + orderBy;
+
+        Query dataQuery = entityManager.createNativeQuery(dataSql, Tuple.class);
+        bindParameters(dataQuery, params);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = dataQuery.getResultList();
+
+        return tuples.stream()
+                .map(this::mapTupleToDto)
+                .toList();
     }
 
     @Override

@@ -16,6 +16,12 @@ public interface TableMapper {
     @Mapping(target = "tableStatusName", source = "tableStatus", qualifiedByName = "toTableStatusName")
     TableDetailResponseDTO toDetailResponseDTO(TableEntity entity);
 
+    @Mapping(target = "tableId", source = "id")
+    @Mapping(target = "tableStatusName", source = "tableStatus", qualifiedByName = "toTableStatusName")
+    @Mapping(target = "totalBooking", constant = "0")
+    @Mapping(target = "lastBookingTime", expression = "java(null)")
+    TableSearchResponseDTO toSearchResponseDTO(TableEntity entity);
+
     @Mapping(target = "tableStatusName", source = "tableStatus", qualifiedByName = "toTableStatusName")
     TableSearchResponseDTO toSearchResponseDTO(TableSearchNativeResultDTO source);
 

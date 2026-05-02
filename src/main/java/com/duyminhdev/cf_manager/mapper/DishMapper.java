@@ -11,6 +11,7 @@ public interface DishMapper {
     @Mapping(target = "dishId", source = "id")
     @Mapping(target = "dishCategoryId", source = "dishCategory.id")
     @Mapping(target = "dishCategoryCode", source = "dishCategory.dishCategoryCode")
+    @Mapping(target = "dishCategoryName", source = "dishCategory.dishCategoryName")
     DishResponseDTO toResponseDTO(Dish entity);
 }
 
