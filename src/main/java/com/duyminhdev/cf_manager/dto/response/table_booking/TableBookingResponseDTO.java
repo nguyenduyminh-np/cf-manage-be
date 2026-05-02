@@ -14,6 +14,7 @@ import java.time.Instant;
 public class TableBookingResponseDTO {
 
     private Integer bookingId;
+    private String bookingInvoiceCode;
 
     private Integer tableId;
     private String tableCode;

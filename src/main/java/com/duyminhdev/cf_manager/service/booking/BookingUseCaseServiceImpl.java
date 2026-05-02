@@ -15,6 +15,7 @@ import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingTransitionContext;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
+import com.duyminhdev.cf_manager.utils.InvoiceCodeService;
 import com.duyminhdev.cf_manager.validator.booking.BookingRuleValidatorChain;
 import com.duyminhdev.cf_manager.validator.booking.BookingValidationContext;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
     private final BookingLockService bookingLockService;
     private final BookingRuleValidatorChain bookingRuleValidatorChain;
     private final BookingDomainEventPublisher bookingDomainEventPublisher;
+    private final InvoiceCodeService invoiceCodeService;
 
     @Override
     @Transactional
@@ -75,6 +77,8 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
             entity.setActive(true);
 
             bookingStateMachine.initialize(entity, initialStatus);
+
+            entity.setBookingInvoiceCode(invoiceCodeService.generateBookingCode());
 
             TableBooking saved = tableBookingRepository.save(entity);
             serviceSupport.recomputeAndSyncTableStatus(saved.getTable().getId());
@@ -462,6 +466,7 @@ public class BookingUseCaseServiceImpl implements BookingUseCaseService {
         booking.setBookingStatus(BookingStatusEnum.CONFIRMED.getCode());
         booking.setCheckInAt(null);
         booking.setCheckOutAt(null);
+        booking.setBookingInvoiceCode(invoiceCodeService.generateBookingCode());
 
         return booking;
     }

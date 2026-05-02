@@ -46,4 +46,30 @@ public class InvoiceCodeService {
         String datePart = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         return String.format("HD-%s-%04d", datePart, nextValue);
     }
+
+    /**
+     * Sinh mã đặt bàn theo ngày, dùng cùng sequence với hóa đơn
+     * nhưng prefix "DB-" (Đặt Bàn) để phân biệt ngữ nghĩa.
+     * Format: DB-YYYYMMDD-XXXX
+     */
+    @Transactional
+    public String generateBookingCode() {
+        Instant now = Instant.now();
+        LocalDate today = now.atZone(ZONE_ID).toLocalDate();
+
+        InvoiceSequence sequence = sequenceRepository.findByDateForUpdate(today)
+                .orElseGet(() -> {
+                    InvoiceSequence newSeq = new InvoiceSequence();
+                    newSeq.setSeqDate(today);
+                    newSeq.setCurrentValue(0L);
+                    return newSeq;
+                });
+
+        long nextValue = sequence.getCurrentValue() + 1;
+        sequence.setCurrentValue(nextValue);
+        sequenceRepository.save(sequence);
+
+        String datePart = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        return String.format("DB-%s-%04d", datePart, nextValue);
+    }
 }

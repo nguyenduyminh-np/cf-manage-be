@@ -18,6 +18,7 @@ public interface TableBookingMapper {
     @Mapping(target = "active", ignore = true)
     @Mapping(target = "checkInAt", ignore = true)
     @Mapping(target = "checkOutAt", ignore = true)
+    @Mapping(target = "bookingInvoiceCode", ignore = true)
     TableBooking toNewEntity(TableBookingCreateRequestDTO request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

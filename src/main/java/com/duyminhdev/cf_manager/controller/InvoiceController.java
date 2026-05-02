@@ -1,22 +1,18 @@
 package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceConfirmPaymentRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceCountRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceCreateRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceDetailRequestDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceConfirmPaymentResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceCountResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceDetailResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceResponseDTO;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.invoice.*;
+import com.duyminhdev.cf_manager.dto.response.invoice.*;
 import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/invoice")
@@ -25,6 +21,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+
+    @PostMapping("/search")
+    public ApiResponse<PageResponse<List<InvoiceListItemDTO>>> search(
+            @Valid @RequestBody InvoiceSearchRequestDTO request) {
+        return new ApiResponse<>(HttpStatus.OK.value(), "SUCCESS", invoiceService.search(request));
+    }
+
+    @PostMapping("/get-detail")
+    public ApiResponse<InvoiceDetailResponseDTO> getDetail(
+            @Valid @RequestBody InvoiceDetailRequestDTO request) {
+        return new ApiResponse<>(HttpStatus.OK.value(), "SUCCESS", invoiceService.getDetail(request.getInvoiceId()));
+    }
 
     /**
      * Lay thong tin dem hoa don, cho phep body optional.
@@ -80,7 +88,7 @@ public class InvoiceController {
      * Lay chi tiet day du cua hoa don.
      */
     @PostMapping("/detail")
-    public ApiResponse<InvoiceDetailResponseDTO> detail(
+    public ApiResponse<InvoiceDetailResponse> detail(
             @Valid @RequestBody InvoiceDetailRequestDTO request
     ) {
         /**

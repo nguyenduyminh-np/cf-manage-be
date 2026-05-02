@@ -1,16 +1,15 @@
 package com.duyminhdev.cf_manager.service;
 
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceConfirmPaymentRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceCountRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceCreateRequestDTO;
-import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceDetailRequestDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceConfirmPaymentResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceCountResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceDetailResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceResponseDTO;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.request.invoice.*;
+import com.duyminhdev.cf_manager.dto.response.invoice.*;
+
+import java.util.List;
 
 public interface InvoiceService {
 
+    PageResponse<List<InvoiceListItemDTO>> search(InvoiceSearchRequestDTO request);
+    InvoiceDetailResponseDTO getDetail(Integer invoiceId);
     /**
      * Đếm số invoice theo ngày và trả về mã hóa đơn kế tiếp.
      */
@@ -29,5 +28,5 @@ public interface InvoiceService {
     /**
      * Lấy chi tiết đầy đủ của hóa đơn để hiển thị chứng từ thanh toán.
      */
-    InvoiceDetailResponseDTO detail(InvoiceDetailRequestDTO request);
+    InvoiceDetailResponse detail(InvoiceDetailRequestDTO request);
 }

@@ -1,48 +1,23 @@
 package com.duyminhdev.cf_manager.dto.response.invoice;
 
-import lombok.*;
-
+import com.duyminhdev.cf_manager.dto.response.payment.*;
+import lombok.Builder;
+import lombok.Data;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 @Builder
 public class InvoiceDetailResponseDTO {
-
     private Integer invoiceId;
     private String invoiceCode;
-    private Long dishOrderId;
-
-    private Integer tableId;
-    private String tableCode;
-    private String tableName;
-
-    private Integer accountId;
-    private String accountUsername;
-    private String accountFullName;
-
+    private BigDecimal totalAmount;
     private String paymentStatus;
-    private String paymentStatusName;
-
     private String paymentMethod;
-    private String paymentMethodName;
-
-    private Integer guestCount;
-    private BigDecimal totalMoney;
-
-    private Integer bookingId;
-    private String customerName;
-    private String customerPhone;
-
-    private Boolean active;
-    private Instant createdTime;
-
-    private String uriVnPay;
-
-    private List<InvoiceLineResponseDTO> invoiceDetails;
+    private Instant createdAt;
+    private DiningTableDto diningTable;
+    private AccountDto createdBy;          // nhân viên thanh toán
+    private CustomerInfoDto customer;
+    private List<OrderItemDto> items;     // món trong hóa đơn (từ invoice_detail)
 }
-

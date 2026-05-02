@@ -74,6 +74,7 @@ public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookin
                     tb.is_deposit_forfeited AS depositForfeited,
                     tb.deposit_txn_ref AS depositTxnRef,
                     tb.note AS note,
+                    tb.booking_invoice_code AS bookingInvoiceCode,
                     a.id AS accountId,
                     a.username AS accountUsername,
                     a.full_name AS accountFullName,
@@ -122,6 +123,7 @@ public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookin
                     tb.is_deposit_forfeited AS depositForfeited,
                     tb.deposit_txn_ref AS depositTxnRef,
                     tb.note AS note,
+                    tb.booking_invoice_code AS bookingInvoiceCode,
                     a.id AS accountId,
                     a.username AS accountUsername,
                     a.full_name AS accountFullName,
@@ -161,6 +163,7 @@ public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookin
     private TableBookingDetailNativeResultDTO mapTupleToDto(Tuple tuple) {
         return TableBookingDetailNativeResultDTO.builder()
                 .bookingId(NativeSqlTupleUtils.getInteger(tuple, "bookingId"))
+                .bookingInvoiceCode(NativeSqlTupleUtils.getString(tuple, "bookingInvoiceCode"))
                 .tableId(NativeSqlTupleUtils.getInteger(tuple, "tableId"))
                 .tableCode(NativeSqlTupleUtils.getString(tuple, "tableCode"))
                 .tableName(NativeSqlTupleUtils.getString(tuple, "tableName"))

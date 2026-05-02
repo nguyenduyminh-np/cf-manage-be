@@ -1,17 +1,22 @@
 package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.constant.VnPayConstant;
+import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.DishGroupedByTableNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResult;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceSearchNativeResult;
 import com.duyminhdev.cf_manager.dto.request.invoice.*;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceConfirmPaymentResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceCountResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceDetailResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.invoice.*;
+import com.duyminhdev.cf_manager.dto.response.payment.AccountDto;
+import com.duyminhdev.cf_manager.dto.response.payment.CustomerInfoDto;
+import com.duyminhdev.cf_manager.dto.response.payment.DiningTableDto;
+import com.duyminhdev.cf_manager.dto.response.payment.OrderItemDto;
 import com.duyminhdev.cf_manager.entity.*;
 import com.duyminhdev.cf_manager.enums.DishOrderStatusCodeEnum;
 import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
 import com.duyminhdev.cf_manager.enums.PaymentStatusEnum;
+import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.mapper.InvoiceDetailPayloadMapper;
 import com.duyminhdev.cf_manager.mapper.InvoiceMapper;
 import com.duyminhdev.cf_manager.repository.*;
@@ -29,6 +34,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +49,92 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceMapper invoiceMapper;
     private final InvoiceDetailPayloadMapper invoiceDetailPayloadMapper;
     private final ServiceSupport serviceSupport;
+
+    @Override
+    public PageResponse<List<InvoiceListItemDTO>> search(InvoiceSearchRequestDTO request) {
+        int page = request.getPage() != null && request.getPage() >= 0 ? request.getPage() : 0;
+        int limit = request.getLimit() != null && request.getLimit() > 0 ? request.getLimit() : 20;
+        int offset = page * limit;
+
+        List<InvoiceSearchNativeResult> rows = nativeSqlInvoiceRepository.searchInvoices(request, offset, limit);
+        long total = nativeSqlInvoiceRepository.countInvoices(request);
+
+        List<InvoiceListItemDTO> list = rows.stream()
+                .map(r -> InvoiceListItemDTO.builder()
+                        .id(r.getId())
+                        .invoiceCode(r.getInvoiceCode())
+                        .totalAmount(r.getTotalAmount())
+                        .paymentStatus(r.getPaymentStatus())
+                        .paymentMethod(r.getPaymentMethod())
+                        .createdAt(r.getCreatedAt())
+                        .fullName(r.getFullName())
+                        .bookingInvoiceCode(r.getBookingInvoiceCode())
+                        .build())
+                .collect(Collectors.toList());
+
+        PageResponse<List<InvoiceListItemDTO>> response = new PageResponse<>();
+        response.setRows(list);
+        response.setPageNo(page);
+        response.setPageSize(limit);
+        response.setTotalElements((int) total);
+        response.setTotalPages((int) Math.ceil((double) total / limit));
+        return response;
+    }
+
+    @Override
+    public InvoiceDetailResponseDTO getDetail(Integer invoiceId) {
+        InvoiceDetailNativeResult result = nativeSqlInvoiceRepository.findInvoiceDetailById(invoiceId)
+                .orElseThrow(() -> new InvalidDataException("Hóa đơn không tồn tại"));
+
+        // Lấy chi tiết món từ invoice_detail
+        List<InvoiceDetail> details = invoiceDetailRepository.findAllByInvoiceId(invoiceId);
+        List<OrderItemDto> items = details.stream().map(d -> {
+            BigDecimal unitPrice = d.getUnitPrice();
+            return OrderItemDto.builder()
+                    .dishId(d.getDish().getId())
+                    .dishCode(d.getDish().getDishCode())
+                    .dishName(d.getDish().getDishName())
+                    .quantity(d.getQuantity())
+                    .unitPrice(unitPrice)
+                    .subtotal(unitPrice.multiply(BigDecimal.valueOf(d.getQuantity())))
+                    .build();
+        }).collect(Collectors.toList());
+
+        // Build thông tin bàn, account, customer
+        DiningTableDto tableDto = DiningTableDto.builder()
+                .id(result.getTableId())
+                .tableCode(result.getTableCode())
+                .tableName(result.getTableName())
+                .floor(result.getFloor())
+                .slot(result.getSlot())
+                .build();
+
+        AccountDto accountDto = AccountDto.builder()
+                .accountId(result.getAccountId())
+                .username(result.getUsername())
+                .fullName(result.getFullName())
+                .build();
+
+        CustomerInfoDto customerDto = CustomerInfoDto.builder()
+                .bookingId(result.getBookingId())
+                .customerName(result.getCustomerName() != null ? result.getCustomerName() : "Khách vãng lai")
+                .phoneNumber(result.getPhoneNumber())
+                .build();
+
+        return InvoiceDetailResponseDTO.builder()
+                .invoiceId(result.getInvoiceId())
+                .invoiceCode(result.getInvoiceCode())
+                .totalAmount(result.getTotalAmount())
+                .paymentStatus(result.getPaymentStatus())
+                .paymentMethod(result.getPaymentMethod())
+                .createdAt(result.getCreatedAt())
+                .diningTable(tableDto)
+                .createdBy(accountDto)
+                .customer(customerDto)
+                .items(items)
+                .build();
+    }
+
 
     @Override
     /**
@@ -161,7 +253,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     /**
      * Lấy chi tiết hóa đơn để phục vụ hiển thị chứng từ thanh toán.
      */
-    public InvoiceDetailResponseDTO detail(InvoiceDetailRequestDTO request) {
+    public InvoiceDetailResponse detail(InvoiceDetailRequestDTO request) {
         /**
          * Flow detail invoice:
          * 1. Gọi native query lấy full rows
@@ -175,7 +267,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             );
         }
 
-        InvoiceDetailResponseDTO response = invoiceMapper.toDetailResponseDTO(rows);
+        InvoiceDetailResponse response = invoiceMapper.toDetailResponseDTO(rows);
 
         if (PaymentMethodEnum.BANK_TRANSFER.getCode().equalsIgnoreCase(response.getPaymentMethod())
                 && PaymentStatusEnum.PENDING.getCode().equalsIgnoreCase(response.getPaymentStatus())) {

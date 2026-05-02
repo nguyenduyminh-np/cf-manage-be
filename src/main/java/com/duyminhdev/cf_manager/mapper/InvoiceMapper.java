@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.mapper;
 
 import com.duyminhdev.cf_manager.dto.request.invoice.InvoiceCreateRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceConfirmPaymentResponseDTO;
-import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceDetailResponseDTO;
+import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceDetailResponse;
 import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceLineResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.invoice.InvoiceResponseDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.InvoiceDetailNativeResultDTO;
@@ -61,7 +61,7 @@ public abstract class InvoiceMapper {
                 .build();
     }
 
-    public InvoiceDetailResponseDTO toDetailResponseDTO(List<InvoiceDetailNativeResultDTO> rows) {
+    public InvoiceDetailResponse toDetailResponseDTO(List<InvoiceDetailNativeResultDTO> rows) {
         if (rows == null || rows.isEmpty()) {
             return null;
         }
@@ -75,7 +75,7 @@ public abstract class InvoiceMapper {
             }
         }
 
-        return InvoiceDetailResponseDTO.builder()
+        return InvoiceDetailResponse.builder()
                 .invoiceId(first.getInvoiceId())
                 .invoiceCode(first.getInvoiceCode())
                 .dishOrderId(first.getDishOrderId())

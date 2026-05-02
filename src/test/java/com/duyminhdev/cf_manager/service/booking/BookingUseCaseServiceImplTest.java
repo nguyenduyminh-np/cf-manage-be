@@ -11,6 +11,7 @@ import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingTransitionContext;
+import com.duyminhdev.cf_manager.utils.InvoiceCodeService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import com.duyminhdev.cf_manager.validator.booking.BookingRuleValidatorChain;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,9 @@ class BookingUseCaseServiceImplTest {
     @Mock
     private BookingDomainEventPublisher bookingDomainEventPublisher;
 
+    @Mock
+    private InvoiceCodeService invoiceCodeService;
+
     private BookingUseCaseServiceImpl bookingUseCaseService;
 
     @BeforeEach
@@ -70,7 +74,8 @@ class BookingUseCaseServiceImplTest {
                 bookingStateMachine,
                 bookingLockService,
                 bookingRuleValidatorChain,
-                bookingDomainEventPublisher
+                bookingDomainEventPublisher,
+                invoiceCodeService
         );
     }
 

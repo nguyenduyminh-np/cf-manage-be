@@ -61,6 +61,9 @@ public class TableBooking {
     @Column(name = "note", length = 255)
     private String note;
 
+    @Column(name = "booking_invoice_code", length = 100)
+    private String bookingInvoiceCode;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "fk_table_booking_account_id"))
     private Account account;

@@ -17,6 +17,7 @@ import java.time.Instant;
 public class TableBookingDetailNativeResultDTO {
 
     private Integer bookingId;
+    private String bookingInvoiceCode;
 
     private Integer tableId;
     private String tableCode;

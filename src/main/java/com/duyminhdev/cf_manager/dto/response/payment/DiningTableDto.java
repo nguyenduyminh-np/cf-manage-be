@@ -11,5 +11,4 @@ public class DiningTableDto {
     private String tableName;
     private Integer floor;
     private Integer slot;
-    private String status;
 }

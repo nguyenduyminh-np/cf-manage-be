@@ -91,7 +91,6 @@ public class DishOrderServiceImpl implements DishOrderService {
                 .tableName(table.getTableName())
                 .floor(table.getFloor())
                 .slot(table.getSlot())
-                .status(table.getTableStatus())
                 .build();
         // 7. Nhân viên tạo đơn
         Account createdBy = order.getAccount();
