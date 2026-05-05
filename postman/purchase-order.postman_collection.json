@@ -1,0 +1,121 @@
+{
+  "info": {
+    "name": "CF Manager - Purchase Order API",
+    "_postman_id": "8f4d3c6c-bc64-4c6d-8f0d-1f4c2ef2a7a1",
+    "description": "Collection to test all APIs in PurchaseOrderController. Prerequisites: valid accessToken, supplierId, warehouseId, ingredientId, ingredientId2. Create request stores purchaseOrderId and purchaseOrderCode for subsequent requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "accessToken", "value": "" },
+    { "key": "purchaseOrderId", "value": "1" },
+    { "key": "purchaseOrderCode", "value": "" },
+    { "key": "supplierId", "value": "1" },
+    { "key": "warehouseId", "value": "1" },
+    { "key": "ingredientId", "value": "1" },
+    { "key": "ingredientId2", "value": "2" }
+  ],
+  "item": [
+    {
+      "name": "Purchase Order",
+      "item": [
+        {
+          "name": "Search Purchase Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purchaseOrderCode\": null,\n  \"paymentStatus\": null,\n  \"totalPriceFrom\": null,\n  \"totalPriceTo\": null,\n  \"fromDate\": null,\n  \"toDate\": null,\n  \"page\": 0,\n  \"limit\": 10,\n  \"sortField\": \"createdTime\",\n  \"sortDir\": \"desc\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/purchase-order/search"
+          }
+        },
+        {
+          "name": "Create Purchase Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const jsonData = pm.response.json();",
+                  "  if (jsonData && jsonData.data) {",
+                  "    if (jsonData.data.id) {",
+                  "      pm.collectionVariables.set('purchaseOrderId', String(jsonData.data.id));",
+                  "    }",
+                  "    if (jsonData.data.purchaseOrderCode) {",
+                  "      pm.collectionVariables.set('purchaseOrderCode', jsonData.data.purchaseOrderCode);",
+                  "    }",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purchaseOrderCode\": null,\n  \"totalPrice\": 290000,\n  \"paymentStatus\": \"APPROVED\",\n  \"orderDate\": \"2026-05-02T10:00:00Z\",\n  \"supplierId\": {{supplierId}},\n  \"warehouseId\": {{warehouseId}},\n  \"details\": [\n    {\n      \"ingredientId\": {{ingredientId}},\n      \"quantity\": 10,\n      \"unitPrice\": 25000\n    },\n    {\n      \"ingredientId\": {{ingredientId2}},\n      \"quantity\": 4,\n      \"unitPrice\": 15000\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/purchase-order/create"
+          }
+        },
+        {
+          "name": "Update Purchase Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{purchaseOrderId}},\n  \"totalPrice\": 320000,\n  \"paymentStatus\": \"APPROVED\",\n  \"orderDate\": \"2026-05-02T11:00:00Z\",\n  \"supplierId\": {{supplierId}},\n  \"warehouseId\": {{warehouseId}},\n  \"details\": [\n    {\n      \"id\": null,\n      \"ingredientId\": {{ingredientId}},\n      \"quantity\": 12,\n      \"unitPrice\": 25000\n    },\n    {\n      \"id\": null,\n      \"ingredientId\": {{ingredientId2}},\n      \"quantity\": 4,\n      \"unitPrice\": 20000\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/purchase-order/update"
+          }
+        },
+        {
+          "name": "Update Purchase Order Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{purchaseOrderId}},\n  \"newStatus\": \"COMPLETED\",\n  \"warehouseId\": {{warehouseId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/purchase-order/status"
+          }
+        },
+        {
+          "name": "Purchase Order Detail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{purchaseOrderId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/purchase-order/detail"
+          }
+        }
+      ]
+    }
+  ]
+}

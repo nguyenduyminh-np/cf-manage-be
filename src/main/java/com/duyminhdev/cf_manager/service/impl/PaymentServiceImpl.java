@@ -1,6 +1,8 @@
 package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableBookingDetailNativeResultDTO;
+import com.duyminhdev.cf_manager.dto.request.dish_order.DishOrderDetailPayloadDTO;
+import com.duyminhdev.cf_manager.dto.request.payment.OrderAndPayRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.payment.PaymentRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.payment.*;
 import com.duyminhdev.cf_manager.entity.*;
@@ -16,6 +18,7 @@ import com.duyminhdev.cf_manager.utils.InvoiceCodeService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -131,6 +134,142 @@ public class PaymentServiceImpl implements PaymentService {
         serviceSupport.recomputeAndSyncTableStatus(order.getTable().getId());
 
         // 9. Xây dựng response
+        return PaymentResponse.builder()
+                .invoice(toInvoiceDto(invoice))
+                .invoiceDetails(invoiceDetails.stream().map(this::toInvoiceDetailDto).toList())
+                .cashFlow(toCashFlowDto(cashFlow))
+                .build();
+    }
+
+    /**
+     * Tạo đơn order và thanh toán ngay lập tức trong một transaction duy nhất.
+     * Luồng rút gọn dành cho POS: nhân viên chọn món → bấm "Thanh toán" → hoàn tất.
+     *
+     * <p>Các bước xử lý:
+     * <ol>
+     *   <li>Validate bàn và danh sách món</li>
+     *   <li>Tạo DishOrder với trạng thái khởi tạo</li>
+     *   <li>Tạo DishOrderDetail và tính totalBill</li>
+     *   <li>Tạo Invoice + InvoiceDetail</li>
+     *   <li>Ghi CashFlow thu tiền</li>
+     *   <li>Cập nhật trạng thái DishOrder → PAID</li>
+     *   <li>Đồng bộ trạng thái bàn</li>
+     * </ol>
+     */
+    @Override
+    @Transactional
+    public PaymentResponse orderAndPay(OrderAndPayRequestDTO request) {
+        PaymentMethodEnum paymentMethod = PaymentMethodEnum.fromCode(request.getPaymentMethod());
+
+        // ── 1. Lấy thông tin bàn ──────────────────────────────────────────────
+        TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+
+        // ── 2. Lấy trạng thái khởi tạo (PROCESSING) rồi set luôn PAID sau đó ──
+        DishOrderStatus processingStatus = serviceSupport
+                .getDishOrderStatusByCode(DishOrderStatusCodeEnum.PROCESSING.getCode());
+        DishOrderStatus paidStatus = dishOrderStatusRepository
+                .findByDishOrderStatusCode(DishOrderStatusCodeEnum.PAID.getCode())
+                .orElseThrow(() -> new IllegalStateException("Không tìm thấy trạng thái PAID"));
+
+        // ── 3. Lấy nhân viên đang đăng nhập ──────────────────────────────────
+        Account cashier = serviceSupport.getCurrentAccount();
+
+        // ── 4. Tạo và lưu DishOrder (trạng thái ban đầu: PROCESSING) ─────────
+        DishOrder dishOrder = DishOrder.builder()
+                .note(request.getDescription())
+                .createdTime(Instant.now())
+                .active(true)
+                .status(processingStatus)
+                .table(table)
+                .account(cashier)
+                .build();
+        DishOrder savedOrder = dishOrderRepository.save(dishOrder);
+
+        // ── 5. Tạo DishOrderDetail và tính tổng tiền ─────────────────────────
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        List<DishOrderDetail> details = new ArrayList<>();
+        List<OrderItemSnapshot> snapshots = new ArrayList<>();
+
+        for (DishOrderDetailPayloadDTO payload : request.getDishOrderDetails()) {
+            Dish dish = serviceSupport.getActiveDish(payload.getDishId());
+            BigDecimal unitPrice = dish.getPrice();
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(payload.getQuantity()));
+
+            DishOrderDetail detail = DishOrderDetail.builder()
+                    .dishOrder(savedOrder)
+                    .dish(dish)
+                    .quantity(payload.getQuantity())
+                    .note(payload.getNote())
+                    .price(lineTotal)
+                    .createdTime(Instant.now())
+                    .active(true)
+                    .build();
+            details.add(detail);
+            snapshots.add(new OrderItemSnapshot(dish, payload.getQuantity(), unitPrice));
+            totalAmount = totalAmount.add(lineTotal);
+        }
+        dishOrderDetailRepository.saveAll(details);
+
+        // Cập nhật totalBill cho DishOrder
+        savedOrder.setTotalBill(totalAmount);
+        dishOrderRepository.save(savedOrder);
+
+        // ── 6. Lấy thông tin khách hàng từ booking đang hoạt động ─────────────
+        CustomerInfoDto customerInfo = getActiveBookingCustomer(table.getId());
+
+        // ── 7. Tạo Invoice ────────────────────────────────────────────────────
+        String invoiceCode = invoiceCodeService.generateInvoiceCode();
+        Invoice invoice = Invoice.builder()
+                .invoiceCode(invoiceCode)
+                .totalMoney(totalAmount)
+                .paymentStatus(PaymentStatusEnum.PAID.name())
+                .paymentMethod(paymentMethod.getLabel())
+                .createdTime(Instant.now())
+                .active(true)
+                .account(cashier)
+                .table(table)
+                .dishOrder(savedOrder)
+                .booking(customerInfo.getBookingId() != null
+                        ? tableBookingRepository.findById(customerInfo.getBookingId()).orElse(null)
+                        : null)
+                .customerName(customerInfo.getCustomerName())
+                .customerPhone(customerInfo.getPhoneNumber())
+                .build();
+        invoice = invoiceRepository.save(invoice);
+
+        // ── 8. Tạo InvoiceDetail (snapshot giá tại thời điểm thanh toán) ──────
+        List<InvoiceDetail> invoiceDetails = new ArrayList<>();
+        for (OrderItemSnapshot item : snapshots) {
+            InvoiceDetail invDetail = InvoiceDetail.builder()
+                    .quantity(item.quantity)
+                    .unitPrice(item.unitPrice)
+                    .createdTime(Instant.now())
+                    .active(true)
+                    .invoice(invoice)
+                    .dish(item.dish)
+                    .build();
+            invoiceDetails.add(invoiceDetailRepository.save(invDetail));
+        }
+
+        // ── 9. Ghi nhận dòng tiền thu vào ────────────────────────────────────
+        CashFlow cashFlow = CashFlow.builder()
+                .totalMoney(totalAmount)
+                .flowType(FlowTypeEnum.INCOME.name())
+                .note("Thanh toán hóa đơn " + invoiceCode)
+                .createdTime(Instant.now())
+                .active(true)
+                .account(cashier)
+                .build();
+        cashFlow = cashFlowRepository.save(cashFlow);
+
+        // ── 10. Cập nhật trạng thái DishOrder → PAID ─────────────────────────
+        savedOrder.setStatus(paidStatus);
+        dishOrderRepository.save(savedOrder);
+
+        // ── 11. Đồng bộ trạng thái bàn ───────────────────────────────────────
+        serviceSupport.recomputeAndSyncTableStatus(table.getId());
+
+        // ── 12. Trả kết quả ───────────────────────────────────────────────────
         return PaymentResponse.builder()
                 .invoice(toInvoiceDto(invoice))
                 .invoiceDetails(invoiceDetails.stream().map(this::toInvoiceDetailDto).toList())

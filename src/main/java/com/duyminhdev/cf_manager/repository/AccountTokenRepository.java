@@ -27,4 +27,8 @@ public interface AccountTokenRepository extends JpaRepository<AccountToken, Inte
                             and t.refreshTokenExpiresAt < :now
                         """)
         int revokeExpiredRefreshTokens(@Param("now") Instant now);
+
+    @Modifying
+    @Query("UPDATE AccountToken t SET t.revoked = true WHERE t.account.id = :accountId AND t.revoked = false")
+    void revokeAllByAccountId(@Param("accountId") Integer accountId);
 }

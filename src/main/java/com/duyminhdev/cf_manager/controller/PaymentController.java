@@ -2,6 +2,7 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.request.dish_order.PaymentPreviewRequestDTO;
+import com.duyminhdev.cf_manager.dto.request.payment.OrderAndPayRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.payment.PaymentRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.payment_method.PaymentMethodListRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.payment.PaymentPreviewResponseDTO;
@@ -44,6 +45,28 @@ public class PaymentController {
     }
 
     /**
+     * API thanh toán nhanh từ POS: tạo đơn order và thanh toán ngay trong một lần gọi duy nhất.
+     * Không cần lưu order trước, không cần đổi trạng thái, không cần gọi API thanh toán riêng.
+     *
+     * <p>Luồng mới (rút gọn):
+     * <pre>
+     *   Chọn món → Chọn PTTT → Bấm "Thanh toán" → DONE
+     * </pre>
+     *
+     * <p>Luồng cũ (đã thay thế):
+     * <pre>
+     *   Chọn món → Lưu order → Vào lịch sử → Đổi trạng thái → Thanh toán → Lưu
+     * </pre>
+     */
+    @PostMapping("/thanh-toan-nhanh")
+    public ResponseEntity<ApiResponse<PaymentResponse>> orderAndPay(
+            @Valid @RequestBody OrderAndPayRequestDTO request) {
+        PaymentResponse data = paymentService.orderAndPay(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(HttpStatus.CREATED.value(), "Đặt món và thanh toán thành công", data));
+    }
+
+    /**
      * Lay danh sach phuong thuc thanh toan, cho phep body optional.
      */
     @PostMapping("/phuong-thuc-thanh-toan")
@@ -61,3 +84,4 @@ public class PaymentController {
         return new ApiResponse<>(200, "GET_PAYMENT_METHOD_LIST_SUCCESS", paymentMethodService.getAll(safeRequest));
     }
 }
+
