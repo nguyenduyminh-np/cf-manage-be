@@ -56,8 +56,44 @@ public class IngredientController {
         return new ApiResponse<>(200, "DELETE_INGREDIENT_SUCCESS");
     }
 
+    /**
+     * Lấy chi tiết nguyên liệu kèm đầy đủ thông tin từ bảng liên kết:
+     * ingredientCategoryCode, ingredientCategoryName,
+     * supplierCode, supplierName, unitCode, unitName.
+     */
     @PostMapping("/detail")
     public ApiResponse<IngredientDetailResponseDTO> detail(@Valid @RequestBody IngredientIdRequest request) {
         return new ApiResponse<>(200, "GET_INGREDIENT_DETAIL_SUCCESS", ingredientService.getDetail(request));
     }
-}
+
+    // ============================================================
+    // Nguồn dữ liệu cho dropdown khi thêm mới / cập nhật nguyên liệu
+    // ============================================================
+
+    /**
+     * Lấy toàn bộ danh mục nguyên liệu đang hoạt động.
+     * Mỗi item gồm: ingredient_category_code | ingredient_category_name
+     */
+    @PostMapping("/danh-sach-danh-muc")
+    public ApiResponse<List<IngredientCategorySelectDTO>> danhSachDanhMuc() {
+        return new ApiResponse<>(200, "GET_DANH_MUC_SUCCESS", ingredientService.getDanhSachDanhMuc());
+    }
+
+    /**
+     * Lấy toàn bộ đơn vị tính đang hoạt động.
+     * Mỗi item gồm: unit_code | unit_name
+     */
+    @PostMapping("/danh-sach-don-vi")
+    public ApiResponse<List<UnitSelectDTO>> danhSachDonVi() {
+        return new ApiResponse<>(200, "GET_DON_VI_SUCCESS", ingredientService.getDanhSachDonVi());
+    }
+
+    /**
+     * Lấy toàn bộ nhà cung cấp đang hoạt động.
+     * Mỗi item gồm: supplier_code | supplier_name
+     */
+    @PostMapping("/danh-sach-nha-cung-cap")
+    public ApiResponse<List<SupplierSelectDTO>> danhSachNhaCungCap() {
+        return new ApiResponse<>(200, "GET_NHA_CUNG_CAP_SUCCESS", ingredientService.getDanhSachNhaCungCap());
+    }
+}

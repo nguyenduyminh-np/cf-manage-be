@@ -2,6 +2,7 @@
 package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.IngredientDetailNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.IngredientSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.ingredient.IngredientIdRequest;
 import com.duyminhdev.cf_manager.dto.request.ingredient.*;
@@ -155,8 +156,8 @@ public class IngredientServiceImpl implements IngredientService {
 
         // ------------------- Private helper methods -------------------
 
-        private IngredientDetailResponseDTO buildDetail(Integer id) {
-        Ingredient ingredient = ingredientRepository.findById(id)
+	private IngredientDetailResponseDTO buildDetail(Integer id) {
+        IngredientDetailNativeResultDTO native_ = nativeSqlIngredientRepository.findDetailById(id)
                 .orElseThrow(() -> new InvalidDataException("Nguyên liệu không tồn tại"));
 
         List<StockLevel> stockLevels = stockLevelRepository
@@ -173,19 +174,22 @@ public class IngredientServiceImpl implements IngredientService {
                 .collect(Collectors.toList());
 
         return IngredientDetailResponseDTO.builder()
-                .id(ingredient.getId())
-                .ingredientCode(ingredient.getIngredientCode())
-                .ingredientName(ingredient.getIngredientName())
-                .selfLife(ingredient.getSelfLife())
-                .averagePrice(ingredient.getAveragePrice())
-                .createdTime(ingredient.getCreatedTime())
-                .active(ingredient.getActive())
-                .ingredientCategoryId(ingredient.getIngredientCategory().getId())
-                .ingredientCategoryName(ingredient.getIngredientCategory().getIngredientCategoryName())
-                .supplierId(ingredient.getSupplier().getId())
-                .supplierName(ingredient.getSupplier().getSupplierName())
-                .unitId(ingredient.getUnit().getId())
-                .unitName(ingredient.getUnit().getUnitName())
+                .id(native_.getId())
+                .ingredientCode(native_.getIngredientCode())
+                .ingredientName(native_.getIngredientName())
+                .selfLife(native_.getSelfLife())
+                .averagePrice(native_.getAveragePrice())
+                .createdTime(native_.getCreatedTime())
+                .active(native_.getActive())
+                .ingredientCategoryId(native_.getIngredientCategoryId())
+                .ingredientCategoryCode(native_.getIngredientCategoryCode())
+                .ingredientCategoryName(native_.getIngredientCategoryName())
+                .supplierId(native_.getSupplierId())
+                .supplierCode(native_.getSupplierCode())
+                .supplierName(native_.getSupplierName())
+                .unitId(native_.getUnitId())
+                .unitCode(native_.getUnitCode())
+                .unitName(native_.getUnitName())
                 .stockLevels(stockDTOs)
                 .build();
     }
@@ -235,5 +239,42 @@ public class IngredientServiceImpl implements IngredientService {
                 .unitName(dto.getUnitName())
                 .currentStock(dto.getCurrentStock())
                 .build();
+    }
+
+    // ============================================================
+    // Nguồn dữ liệu select cho form thêm / cập nhật nguyên liệu
+    // ============================================================
+
+    @Override
+    public List<IngredientCategorySelectDTO> getDanhSachDanhMuc() {
+        return ingredientCategoryRepository.findAllByActiveTrueOrderByIngredientCategoryNameAsc()
+                .stream()
+                .map(cat -> IngredientCategorySelectDTO.builder()
+                        .ingredientCategoryCode(cat.getIngredientCategoryCode())
+                        .ingredientCategoryName(cat.getIngredientCategoryName())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<UnitSelectDTO> getDanhSachDonVi() {
+        return unitRepository.findAllByActiveTrueOrderByUnitNameAsc()
+                .stream()
+                .map(u -> UnitSelectDTO.builder()
+                        .unitCode(u.getUnitCode())
+                        .unitName(u.getUnitName())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<SupplierSelectDTO> getDanhSachNhaCungCap() {
+        return supplierRepository.findAllByActiveTrueOrderBySupplierNameAsc()
+                .stream()
+                .map(s -> SupplierSelectDTO.builder()
+                        .supplierCode(s.getSupplierCode())
+                        .supplierName(s.getSupplierName())
+                        .build())
+                .collect(Collectors.toList());
     }
 }

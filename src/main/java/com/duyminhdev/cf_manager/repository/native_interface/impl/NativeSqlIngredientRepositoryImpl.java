@@ -1,6 +1,7 @@
 package com.duyminhdev.cf_manager.repository.native_interface.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.IngredientDetailNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.IngredientSearchNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.ingredient.IngredientSearchRequestDTO;
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlIngredientRepository;
@@ -194,6 +195,70 @@ public class NativeSqlIngredientRepositoryImpl implements NativeSqlIngredientRep
                 .unitId(NativeSqlTupleUtils.getInteger(tuple, "unitId"))
                 .unitName(NativeSqlTupleUtils.getString(tuple, "unitName"))
                 .currentStock(NativeSqlTupleUtils.getInteger(tuple, "currentStock"))
+                .build();
+    }
+
+    // ============================================================
+    // Native query chi tiết 1 nguyên liệu (JOIN lấy thêm *code)
+    // ============================================================
+
+    private static final String DETAIL_SELECT = """
+        SELECT
+            i.id                            AS id,
+            i.ingredient_code               AS ingredientCode,
+            i.ingredient_name               AS ingredientName,
+            i.shelf_life                    AS selfLife,
+            i.average_price                 AS averagePrice,
+            i.created_at                    AS createdTime,
+            i.is_active                     AS active,
+            i.ingredient_category_id        AS ingredientCategoryId,
+            ic.ingredient_category_code     AS ingredientCategoryCode,
+            ic.ingredient_category_name     AS ingredientCategoryName,
+            i.supplier_id                   AS supplierId,
+            s.supplier_code                 AS supplierCode,
+            s.supplier_name                 AS supplierName,
+            i.unit_id                       AS unitId,
+            u.unit_code                     AS unitCode,
+            u.unit_name                     AS unitName
+        FROM ingredient i
+        INNER JOIN ingredient_category ic ON i.ingredient_category_id = ic.id
+        INNER JOIN supplier s             ON i.supplier_id             = s.id
+        INNER JOIN unit u                 ON i.unit_id                 = u.id
+        WHERE i.id = :ingredientId
+        """;
+
+    @Override
+    public Optional<IngredientDetailNativeResultDTO> findDetailById(Integer id) {
+        Query query = entityManager.createNativeQuery(DETAIL_SELECT, Tuple.class);
+        query.setParameter("ingredientId", id);
+
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+
+        if (tuples.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(mapTupleToDetailDto(tuples.get(0)));
+    }
+
+    private IngredientDetailNativeResultDTO mapTupleToDetailDto(Tuple t) {
+        return IngredientDetailNativeResultDTO.builder()
+                .id(NativeSqlTupleUtils.getInteger(t, "id"))
+                .ingredientCode(NativeSqlTupleUtils.getString(t, "ingredientCode"))
+                .ingredientName(NativeSqlTupleUtils.getString(t, "ingredientName"))
+                .selfLife(NativeSqlTupleUtils.getInteger(t, "selfLife"))
+                .averagePrice(NativeSqlTupleUtils.getBigDecimal(t, "averagePrice"))
+                .createdTime(NativeSqlTupleUtils.getInstant(t, "createdTime"))
+                .active(NativeSqlTupleUtils.getBoolean(t, "active"))
+                .ingredientCategoryId(NativeSqlTupleUtils.getInteger(t, "ingredientCategoryId"))
+                .ingredientCategoryCode(NativeSqlTupleUtils.getString(t, "ingredientCategoryCode"))
+                .ingredientCategoryName(NativeSqlTupleUtils.getString(t, "ingredientCategoryName"))
+                .supplierId(NativeSqlTupleUtils.getInteger(t, "supplierId"))
+                .supplierCode(NativeSqlTupleUtils.getString(t, "supplierCode"))
+                .supplierName(NativeSqlTupleUtils.getString(t, "supplierName"))
+                .unitId(NativeSqlTupleUtils.getInteger(t, "unitId"))
+                .unitCode(NativeSqlTupleUtils.getString(t, "unitCode"))
+                .unitName(NativeSqlTupleUtils.getString(t, "unitName"))
                 .build();
     }
 }
