@@ -61,7 +61,7 @@ public class IngredientCategoryController {
         return new ApiResponse<>(200, "GET_INGREDIENT_CATEGORY_DETAIL_SUCCESS", service.getDetail(request));
     }
 
-    @PostMapping("/options")
+    @GetMapping("/options")
     public ApiResponse<List<IngredientCategoryOptionDTO>> options() {
         return new ApiResponse<>(200, "INGREDIENT_CATEGORY_OPTIONS_SUCCESS", service.getOptions());
     }

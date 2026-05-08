@@ -145,6 +145,13 @@ public class ServiceSupport {
         }
     }
 
+    public void validatePurchaseOrderStatusCode(String status) {
+        if (!PurchaseOrderStatusEnum.isValidCode(status)) {
+            throw new InvalidDataException("Invalid purchase order status: " + status);
+        }
+    }
+
+
     public void updateTableStatus(TableEntity table, TableStatusEnum status) {
         table.setTableStatus(status.getCode());
         tableRepository.save(table);

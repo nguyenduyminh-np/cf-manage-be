@@ -2,11 +2,13 @@ package com.duyminhdev.cf_manager.service.impl;
 
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.PurchaseOrderDetailNativeResult;
+import com.duyminhdev.cf_manager.dto.db_result.native_sql.PurchaseOrderIngredientSelectNativeResult;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.PurchaseOrderItemNativeResult;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.PurchaseOrderSearchNativeResult;
 import com.duyminhdev.cf_manager.dto.request.purchase_order.*;
 import com.duyminhdev.cf_manager.dto.response.purchase_order.*;
 import com.duyminhdev.cf_manager.entity.*;
+import com.duyminhdev.cf_manager.enums.PurchaseOrderStatusEnum;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.repository.*;
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlPurchaseOrderRepository;
@@ -33,14 +35,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
-    // ───────────────────────────────────────── Fix #7: Bảng chuyển đổi trạng thái hợp lệ
-    private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
-            "DRAFT",     Set.of("PENDING", "APPROVED"),
-            "PENDING",   Set.of("APPROVED", "CANCELLED"),
-            "APPROVED",  Set.of("COMPLETED", "CANCELLED"),
-            "COMPLETED", Set.of(),
-            "CANCELLED", Set.of()
-    );
+    // Bảng chuyển đổi trạng thái được quản lý trong PurchaseOrderStatusEnum.allowedTransitions()
 
     private final PurchaseOrderRepository        poRepository;
     private final PurchaseOrderDetailRepository  detailRepository;
@@ -69,16 +64,23 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         long total = nativeSqlPurchaseOrderRepository.count(request);
 
         List<PurchaseOrderListItemDTO> list = rows.stream()
-                .map(r -> PurchaseOrderListItemDTO.builder()
-                        .id(r.getId())
-                        .purchaseOrderCode(r.getPurchaseOrderCode())
-                        .totalPrice(r.getTotalPrice())
-                        .paymentStatus(r.getPaymentStatus())
-                        .accountFullName(r.getFullName())
-                        .supplierName(r.getSupplierName())       // Fix #1
-                        .orderDate(r.getOrderDate())
-                        .createdTime(r.getCreatedTime())
-                        .build())
+                .map(r -> {
+                    String statusCode = r.getPaymentStatus();
+                    String statusName = PurchaseOrderStatusEnum.isValidCode(statusCode)
+                            ? PurchaseOrderStatusEnum.fromCode(statusCode).getLabel()
+                            : statusCode;
+                    return PurchaseOrderListItemDTO.builder()
+                            .id(r.getId())
+                            .purchaseOrderCode(r.getPurchaseOrderCode())
+                            .totalPrice(r.getTotalPrice())
+                            .paymentStatus(statusCode)
+                            .paymentStatusName(statusName)
+                            .accountFullName(r.getFullName())
+                            .supplierName(r.getSupplierName())
+                            .orderDate(r.getOrderDate())
+                            .createdTime(r.getCreatedTime())
+                            .build();
+                })
                 .toList();
 
         PageResponse<List<PurchaseOrderListItemDTO>> resp = new PageResponse<>();
@@ -127,25 +129,78 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .map(item -> PurchaseOrderDetailResponseDTO.DetailItem.builder()
                         .id(item.getDetailId())
                         .ingredientId(item.getIngredientId())
+                        .ingredientCode(item.getIngredientCode())
                         .ingredientName(item.getIngredientName())
+                        .supplierId(item.getSupplierId())
                         .quantity(item.getQuantity())
                         .unitPrice(item.getUnitPrice())
                         .lineTotal(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                         .build())
                 .toList();
 
+        String statusCode = header.getPaymentStatus();
+        String statusName = PurchaseOrderStatusEnum.isValidCode(statusCode)
+                ? PurchaseOrderStatusEnum.fromCode(statusCode).getLabel()
+                : statusCode;
+
         return PurchaseOrderDetailResponseDTO.builder()
                 .id(header.getId())
                 .purchaseOrderCode(header.getPurchaseOrderCode())
                 .totalPrice(header.getTotalPrice())
-                .paymentStatus(header.getPaymentStatus())
+                .paymentStatus(statusCode)
+                .paymentStatusName(statusName)
                 .accountFullName(header.getFullName())
-                .supplierName(header.getSupplierName())          // Fix #1
-                .warehouseName(header.getWarehouseName())        // Fix #1
+                .supplierId(header.getSupplierId())
+                .supplierName(header.getSupplierName())
+                .warehouseId(header.getWarehouseId())
+                .warehouseName(header.getWarehouseName())
                 .orderDate(header.getOrderDate())
                 .createdTime(header.getCreatedTime())
                 .details(detailItems)
                 .build();
+    }
+
+    @Override
+    public List<PurchaseOrderWarehouseSelectDTO> getDanhSachNhaKho() {
+        return warehouseRepository.findAllByActiveTrueOrderByWarehouseNameAsc()
+                .stream()
+                .map(warehouse -> PurchaseOrderWarehouseSelectDTO.builder()
+                        .id(warehouse.getId())
+                        .warehouseCode(warehouse.getWarehouseCode())
+                        .warehouseName(warehouse.getWarehouseName())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    public List<PurchaseOrderSupplierSelectDTO> getDanhSachNhaCungCap() {
+        return supplierRepository.findAllByActiveTrueOrderBySupplierNameAsc()
+                .stream()
+                .map(supplier -> PurchaseOrderSupplierSelectDTO.builder()
+                        .id(supplier.getId())
+                        .supplierCode(supplier.getSupplierCode())
+                        .supplierName(supplier.getSupplierName())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    public List<PurchaseOrderIngredientSelectDTO> getDanhSachNguyenLieuTheoNcc(Integer supplierId) {
+        Supplier supplier = supplierRepository.findById(supplierId)
+                .filter(s -> Boolean.TRUE.equals(s.getActive()))
+                .orElseThrow(() -> new InvalidDataException("Nha cung cap khong ton tai hoac da vo hieu hoa"));
+
+        List<PurchaseOrderIngredientSelectNativeResult> rows =
+                nativeSqlPurchaseOrderRepository.findIngredientsBySupplierId(supplier.getId());
+
+        return rows.stream()
+                .map(row -> PurchaseOrderIngredientSelectDTO.builder()
+                        .ingredientId(row.getIngredientId())
+                        .ingredientCode(row.getIngredientCode())
+                        .ingredientName(row.getIngredientName())
+                        .supplierId(row.getSupplierId())
+                        .build())
+                .toList();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -162,8 +217,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new InvalidDataException("Kho nhận hàng không tồn tại"));
 
-        // Fix #8: Phân quyền – nhân viên chỉ được tạo đơn ở DRAFT/PENDING
-        String effectiveStatus = resolveInitialStatus(currentUser, request.getPaymentStatus());
+        // Validate status code hợp lệ trước
+        if (request.getPaymentStatus() != null) {
+            serviceSupport.validatePurchaseOrderStatusCode(request.getPaymentStatus());
+        }
+        // Phân quyền – nhân viên chỉ được tạo đơn ở DRAFT/PENDING
+        PurchaseOrderStatusEnum effectiveStatusEnum = resolveInitialStatus(currentUser, request.getPaymentStatus());
+        String effectiveStatus = effectiveStatusEnum.getCode();
 
         // Fix #3: Sinh mã PO an toàn (dùng MAX id thay vì count)
         PurchaseOrder po = PurchaseOrder.builder()
@@ -187,7 +247,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         // Fix #10: Tính lại totalPrice từ detail (bỏ qua giá trị client gửi)
         BigDecimal computedTotal = computeTotal(details);
         po.setTotalPrice(computedTotal);
-        po.setDetails(details);
         po = poRepository.save(po);
 
         createActivity(currentUser, String.valueOf(po.getId()), "purchase_order", "Tạo đơn nhập hàng");
@@ -203,8 +262,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder po = poRepository.findById(request.getId())
                 .orElseThrow(() -> new InvalidDataException("Đơn nhập hàng không tồn tại"));
 
-        if (Set.of("COMPLETED", "CANCELLED").contains(po.getPaymentStatus())) {
-            throw new InvalidDataException("Không thể sửa đơn hàng đã hoàn thành hoặc đã hủy");
+        PurchaseOrderStatusEnum currentStatusEnum = PurchaseOrderStatusEnum.fromCode(po.getPaymentStatus());
+        if (currentStatusEnum.isTerminal()) {
+            throw new InvalidDataException("Không thể sửa đơn hàng ở trạng thái: " + currentStatusEnum.getLabel());
         }
 
         // Fix #1: Cập nhật supplier/warehouse nếu client gửi
@@ -218,7 +278,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     .orElseThrow(() -> new InvalidDataException("Kho nhận hàng không tồn tại"));
             po.setWarehouse(warehouse);
         }
-        if (request.getPaymentStatus() != null) po.setPaymentStatus(request.getPaymentStatus());
+        if (request.getPaymentStatus() != null) {
+            serviceSupport.validatePurchaseOrderStatusCode(request.getPaymentStatus());
+            po.setPaymentStatus(PurchaseOrderStatusEnum.fromCode(request.getPaymentStatus()).getCode());
+        }
         if (request.getOrderDate() != null)      po.setOrderDate(request.getOrderDate());
 
         // Fix #5: Merge details theo id (thay vì xóa hết rồi tạo mới)
@@ -268,7 +331,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
             // Fix #10: Tính lại tổng tiền
             po.setTotalPrice(computeTotal(updatedDetails));
-            po.setDetails(updatedDetails);
         }
 
         po = poRepository.save(po);
@@ -285,38 +347,40 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder po = poRepository.findById(request.getId())
                 .orElseThrow(() -> new InvalidDataException("Đơn nhập hàng không tồn tại"));
 
-        String currentStatus = po.getPaymentStatus();
-        String newStatus     = request.getNewStatus();
+        // Validate + parse cả hai trạng thái qua enum
+        PurchaseOrderStatusEnum currentStatus = PurchaseOrderStatusEnum.fromCode(po.getPaymentStatus());
+        serviceSupport.validatePurchaseOrderStatusCode(request.getNewStatus());
+        PurchaseOrderStatusEnum targetStatus  = PurchaseOrderStatusEnum.fromCode(request.getNewStatus());
 
-        if (currentStatus.equals(newStatus)) return;
+        if (currentStatus == targetStatus) return;
 
-        // Fix #7: Kiểm soát chuyển đổi trạng thái hợp lệ
-        Set<String> allowed = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
-        if (!allowed.contains(newStatus)) {
+        // Kiểm soát chuyển đổi trạng thái hợp lệ qua enum
+        if (!currentStatus.canTransitionTo(targetStatus)) {
             throw new InvalidDataException(
-                    "Không thể chuyển đơn hàng từ trạng thái [" + currentStatus + "] sang [" + newStatus + "]");
+                    "Không thể chuyển đơn hàng từ [" + currentStatus.getLabel()
+                    + "] sang [" + targetStatus.getLabel() + "]");
         }
 
         Account currentUser = getCurrentAccount();
 
-        switch (newStatus) {
-            case "PENDING":
-                po.setPaymentStatus(newStatus);
+        switch (targetStatus) {
+            case PENDING:
+                po.setPaymentStatus(targetStatus.getCode());
                 createActivity(currentUser, String.valueOf(po.getId()), "purchase_order", "Đơn hàng chờ duyệt");
                 break;
-            case "APPROVED":
-                po.setPaymentStatus(newStatus);
+            case APPROVED:
+                po.setPaymentStatus(targetStatus.getCode());
                 createActivity(currentUser, String.valueOf(po.getId()), "purchase_order", "Đơn hàng đã được duyệt");
                 break;
-            case "CANCELLED":
-                po.setPaymentStatus(newStatus);
+            case CANCELLED:
+                po.setPaymentStatus(targetStatus.getCode());
                 createActivity(currentUser, String.valueOf(po.getId()), "purchase_order", "Đơn nhập hàng đã bị hủy");
                 break;
-            case "COMPLETED":
+            case COMPLETED:
                 completeOrder(po, request, currentUser);
                 break;
             default:
-                throw new InvalidDataException("Trạng thái không hợp lệ: " + newStatus);
+                throw new InvalidDataException("Trạng thái không hợp lệ: " + targetStatus.getCode());
         }
         poRepository.save(po);
     }
@@ -475,22 +539,26 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
      * Admin được phép giữ trạng thái hợp lệ bất kỳ (trừ COMPLETED/CANCELLED khi tạo mới).
      * Nhân viên chỉ được tạo ở DRAFT hoặc PENDING.
      */
-    private String resolveInitialStatus(Account account, String requestedStatus) {
+    private PurchaseOrderStatusEnum resolveInitialStatus(Account account, String requestedStatus) {
         boolean isAdmin = account.getRole() != null
                 && "ADMIN".equalsIgnoreCase(account.getRole().getRoleCode());
 
-        Set<String> forbidden = Set.of("COMPLETED", "CANCELLED");
-        if (forbidden.contains(requestedStatus)) {
-            throw new InvalidDataException("Không thể tạo đơn hàng với trạng thái: " + requestedStatus);
+        // Không được tạo đơn ở trạng thái cuối
+        PurchaseOrderStatusEnum requested = requestedStatus != null
+                ? PurchaseOrderStatusEnum.fromCode(requestedStatus)
+                : PurchaseOrderStatusEnum.DRAFT;
+
+        if (requested.isTerminal()) {
+            throw new InvalidDataException(
+                    "Không thể tạo đơn hàng với trạng thái: " + requested.getLabel());
         }
 
-        if (!isAdmin) {
+        if (!isAdmin && !requested.isDraft() && !requested.isPending()) {
             // Nhân viên chỉ được DRAFT hoặc PENDING
-            if (!"DRAFT".equals(requestedStatus) && !"PENDING".equals(requestedStatus)) {
-                return "PENDING";
-            }
+            return PurchaseOrderStatusEnum.PENDING;
         }
-        return requestedStatus != null ? requestedStatus : "DRAFT";
+
+        return requested;
     }
 
     /** Fix #3: Sinh mã PO an toàn dùng MAX(id). */
@@ -542,26 +610,35 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     /** Map PurchaseOrder entity sang DTO (dùng sau create/update khi đã có details trong memory). */
     private PurchaseOrderDetailResponseDTO mapToDetail(PurchaseOrder po) {
-        List<PurchaseOrderDetailResponseDTO.DetailItem> items = po.getDetails().stream()
-                .filter(d -> Boolean.TRUE.equals(d.getActive()))
+        List<PurchaseOrderDetailResponseDTO.DetailItem> items = detailRepository.findByPurchaseOrderIdAndActiveTrue(po.getId()).stream()
                 .map(d -> PurchaseOrderDetailResponseDTO.DetailItem.builder()
                         .id(d.getId())
                         .ingredientId(d.getIngredient().getId())
+                        .ingredientCode(d.getIngredient().getIngredientCode())
                         .ingredientName(d.getIngredient().getIngredientName())
+                        .supplierId(d.getIngredient().getSupplier() != null ? d.getIngredient().getSupplier().getId() : null)
                         .quantity(d.getQuantity())
                         .unitPrice(d.getUnitPrice())
                         .lineTotal(d.getUnitPrice().multiply(BigDecimal.valueOf(d.getQuantity())))
                         .build())
                 .collect(Collectors.toList());
 
+        String statusCode = po.getPaymentStatus();
+        String statusName = PurchaseOrderStatusEnum.isValidCode(statusCode)
+                ? PurchaseOrderStatusEnum.fromCode(statusCode).getLabel()
+                : statusCode;
+
         return PurchaseOrderDetailResponseDTO.builder()
                 .id(po.getId())
                 .purchaseOrderCode(po.getPurchaseOrderCode())
                 .totalPrice(po.getTotalPrice())
-                .paymentStatus(po.getPaymentStatus())
+                .paymentStatus(statusCode)
+                .paymentStatusName(statusName)
                 .accountFullName(po.getAccount().getFullName())
-                .supplierName(po.getSupplier() != null ? po.getSupplier().getSupplierName() : null)  // Fix #1
-                .warehouseName(po.getWarehouse() != null ? po.getWarehouse().getWarehouseName() : null) // Fix #1
+                .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
+                .supplierName(po.getSupplier() != null ? po.getSupplier().getSupplierName() : null)
+                .warehouseId(po.getWarehouse() != null ? po.getWarehouse().getId() : null)
+                .warehouseName(po.getWarehouse() != null ? po.getWarehouse().getWarehouseName() : null)
                 .createdTime(po.getCreatedTime())
                 .orderDate(po.getOrderDate())
                 .details(items)
@@ -582,5 +659,40 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .active(true)
                 .build();
         activityRepository.save(act);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  DELETE (soft-delete)
+    // ═══════════════════════════════════════════════════════════════════
+    @Override
+    @Transactional
+    public void delete(Integer id) {
+        if (id == null) {
+            throw new InvalidDataException("Id đơn nhập hàng không được trống");
+        }
+
+        PurchaseOrder po = poRepository.findById(id)
+                .orElseThrow(() -> new InvalidDataException("Đơn nhập hàng không tồn tại"));
+
+        PurchaseOrderStatusEnum currentStatus = PurchaseOrderStatusEnum.fromCode(po.getPaymentStatus());
+
+        // Chỉ cho phép xóa đơn ở trạng thái DRAFT
+        if (!currentStatus.isDraft()) {
+            throw new InvalidDataException(
+                    "Chỉ có thể xóa đơn nhập hàng ở trạng thái Bản nháp (DRAFT). "
+                    + "Đơn hiện tại đang ở: " + currentStatus.getLabel());
+        }
+
+        // Soft-delete toàn bộ detail trước
+        List<PurchaseOrderDetail> details = detailRepository.findByPurchaseOrderId(po.getId());
+        details.forEach(d -> d.setActive(false));
+        detailRepository.saveAll(details);
+
+        // Soft-delete đơn hàng
+        po.setActive(false);
+        poRepository.save(po);
+
+        createActivity(getCurrentAccount(), String.valueOf(po.getId()), "purchase_order",
+                "Xóa đơn nhập hàng " + po.getPurchaseOrderCode());
     }
 }

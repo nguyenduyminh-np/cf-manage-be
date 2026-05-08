@@ -158,7 +158,7 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
                     tb.customer_name AS customerName,
                     tb.phone_number AS phoneNumber
                 FROM invoice i
-                INNER JOIN dining_table dt ON dt.id = i.dining_table_id
+                INNER JOIN cafe_table dt ON dt.id = i.dining_table_id
                 INNER JOIN account a ON a.id = i.account_id
                 LEFT JOIN table_booking tb ON tb.id = i.booking_id
                 WHERE i.id = :invoiceId AND i.is_active = 1
@@ -204,7 +204,7 @@ public class NativeSqlInvoiceRepositoryImpl implements NativeSqlInvoiceRepositor
                     idt.unit_price AS unitPrice,
                     (idt.quantity * idt.unit_price) AS lineTotal
                 FROM invoice i
-                INNER JOIN dining_table dt
+                INNER JOIN cafe_table dt
                     ON dt.id = i.dining_table_id
                 INNER JOIN account a
                     ON a.id = i.account_id

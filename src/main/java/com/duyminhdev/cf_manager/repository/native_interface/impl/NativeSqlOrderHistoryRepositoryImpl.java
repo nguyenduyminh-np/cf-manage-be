@@ -38,7 +38,7 @@ public class NativeSqlOrderHistoryRepositoryImpl implements NativeSqlOrderHistor
 
     private static final String FROM_WHERE = """
             FROM dish_order do
-            INNER JOIN dining_table dt ON do.dining_table_id = dt.id
+            INNER JOIN cafe_table dt ON do.dining_table_id = dt.id
             INNER JOIN account acc ON do.account_id = acc.id
             INNER JOIN dish_order_status dos ON do.dish_order_status_id = dos.id
             LEFT JOIN dish_order_detail dod ON do.id = dod.dish_order_id
@@ -129,7 +129,7 @@ public class NativeSqlOrderHistoryRepositoryImpl implements NativeSqlOrderHistor
         String countSql = """
                 SELECT COUNT(DISTINCT do.id)
                 FROM dish_order do
-                INNER JOIN dining_table dt ON do.dining_table_id = dt.id
+                INNER JOIN cafe_table dt ON do.dining_table_id = dt.id
                 INNER JOIN account acc ON do.account_id = acc.id
                 INNER JOIN dish_order_status dos ON do.dish_order_status_id = dos.id
                 LEFT JOIN dish_order_detail dod ON do.id = dod.dish_order_id

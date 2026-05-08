@@ -40,7 +40,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
             """;
 
     private static final String FROM_WHERE = """
-            FROM dining_table dt
+            FROM cafe_table dt
             LEFT JOIN table_booking tb
                 ON tb.dining_table_id = dt.id
                AND (tb.is_active = 1 OR tb.is_active = true)
@@ -66,7 +66,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
                                 dt.table_status AS tableStatus,
                                 dt.floor AS floor,
                                 dt.slot AS slot
-            FROM dining_table dt
+            FROM cafe_table dt
             WHERE (dt.is_active = 1 OR dt.is_active = true)
               AND UPPER(dt.table_status) = :tableStatus
             """;
@@ -198,7 +198,7 @@ public class NativeSqlTableRepositoryImpl implements NativeSqlTableRepository {
 
         String countSql = """
                 SELECT COUNT(1)
-                FROM dining_table dt
+                FROM cafe_table dt
                 WHERE 1 = 1
                 """ + buildWhereClause(request, params);
 

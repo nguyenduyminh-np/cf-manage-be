@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "dining_table") // Đổi sang dining_table để khớp schema
+@Table(name = "cafe_table")
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class TableEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

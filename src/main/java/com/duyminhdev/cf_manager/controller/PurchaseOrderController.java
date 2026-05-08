@@ -58,4 +58,28 @@ public class PurchaseOrderController {
         Integer id = body.get("id");
         return new ApiResponse<>(200, "DETAIL_SUCCESS", service.getDetail(id));
     }
+
+    @PostMapping("/danh-sach-nha-kho")
+    public ApiResponse<List<PurchaseOrderWarehouseSelectDTO>> danhSachNhaKho() {
+        return new ApiResponse<>(200, "GET_DANH_SACH_NHA_KHO_SUCCESS", service.getDanhSachNhaKho());
+    }
+
+    @PostMapping("/danh-sach-nha-cung-cap")
+    public ApiResponse<List<PurchaseOrderSupplierSelectDTO>> danhSachNhaCungCap() {
+        return new ApiResponse<>(200, "GET_DANH_SACH_NHA_CUNG_CAP_SUCCESS", service.getDanhSachNhaCungCap());
+    }
+
+    @PostMapping("/danh-sach-nguyen-lieu-theo-ncc")
+    public ApiResponse<List<PurchaseOrderIngredientSelectDTO>> danhSachNguyenLieuTheoNcc(
+            @Valid @RequestBody PurchaseOrderIngredientBySupplierRequestDTO request) {
+        return new ApiResponse<>(200, "GET_DANH_SACH_NGUYEN_LIEU_THEO_NCC_SUCCESS",
+                service.getDanhSachNguyenLieuTheoNcc(request.getSupplierId()));
+    }
+
+    @PostMapping("/delete")
+    public ApiResponse<Void> delete(@RequestBody Map<String, Integer> body) {
+        Integer id = body.get("id");
+        service.delete(id);
+        return new ApiResponse<>(200, "DELETE_SUCCESS");
+    }
 }

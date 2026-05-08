@@ -13,4 +13,8 @@ public interface PurchaseOrderService {
     PurchaseOrderDetailResponseDTO update(PurchaseOrderUpdateRequestDTO request);
     void updateStatus(PurchaseOrderStatusUpdateRequestDTO request);
     PurchaseOrderDetailResponseDTO getDetail(Integer id);
+    List<PurchaseOrderWarehouseSelectDTO> getDanhSachNhaKho();
+    List<PurchaseOrderSupplierSelectDTO> getDanhSachNhaCungCap();
+    List<PurchaseOrderIngredientSelectDTO> getDanhSachNguyenLieuTheoNcc(Integer supplierId);
+    void delete(Integer id);
 }

@@ -28,7 +28,7 @@ public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookin
             tb.phone_number AS phoneNumber,
             dt.slot AS tableSlot
         FROM table_booking tb
-        INNER JOIN dining_table dt ON dt.id = tb.dining_table_id
+        INNER JOIN cafe_table dt ON dt.id = tb.dining_table_id
         WHERE tb.dining_table_id = :tableId
           AND tb.is_active = 1
           AND tb.booking_status IN ('CONFIRMED', 'CHECKED_IN')
@@ -81,7 +81,7 @@ public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookin
                     tb.is_active AS active,
                     tb.created_at AS createdAt
                 FROM table_booking tb
-                INNER JOIN dining_table dt
+                INNER JOIN cafe_table dt
                     ON dt.id = tb.dining_table_id
                 INNER JOIN account a
                     ON a.id = tb.account_id
@@ -130,7 +130,7 @@ public class NativeSqlTableBookingRepositoryImpl implements NativeSqlTableBookin
                     tb.is_active AS active,
                     tb.created_at AS createdAt
                 FROM table_booking tb
-                INNER JOIN dining_table dt
+                INNER JOIN cafe_table dt
                     ON dt.id = tb.dining_table_id
                 INNER JOIN account a
                     ON a.id = tb.account_id

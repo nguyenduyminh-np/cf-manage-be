@@ -4,6 +4,7 @@ import com.duyminhdev.cf_manager.enums.BookingStatusEnum;
 import com.duyminhdev.cf_manager.enums.DishOrderStatusCodeEnum;
 import com.duyminhdev.cf_manager.enums.PaymentMethodEnum;
 import com.duyminhdev.cf_manager.enums.PaymentStatusEnum;
+import com.duyminhdev.cf_manager.enums.PurchaseOrderStatusEnum;
 import com.duyminhdev.cf_manager.enums.TableStatusEnum;
 import org.mapstruct.Named;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,11 @@ public class EnumDisplayMapper {
     @Named("toPaymentMethodName")
     public String toPaymentMethodName(String code) {
         return safeResolvePaymentMethod(code);
+    }
+
+    @Named("toPurchaseOrderStatusName")
+    public String toPurchaseOrderStatusName(String code) {
+        return safeResolvePurchaseOrderStatus(code);
     }
 
     private String safeResolveTableStatus(String code) {
@@ -71,6 +77,14 @@ public class EnumDisplayMapper {
     private String safeResolvePaymentMethod(String code) {
         try {
             return code == null ? null : PaymentMethodEnum.fromCode(code).getLabel();
+        } catch (Exception ex) {
+            return code;
+        }
+    }
+
+    private String safeResolvePurchaseOrderStatus(String code) {
+        try {
+            return code == null ? null : PurchaseOrderStatusEnum.fromCode(code).getLabel();
         } catch (Exception ex) {
             return code;
         }

@@ -16,6 +16,8 @@ public class PurchaseOrderDetailNativeResult {
     private Instant createdTime;
     private Integer accountId;
     private String fullName;
+    private Integer supplierId;
     private String supplierName;    // Fix #1
+    private Integer warehouseId;
     private String warehouseName;   // Fix #1
-}
+}

@@ -34,7 +34,7 @@ public class NativeSqlChatRepositoryImpl implements NativeSqlChatRepository {
                     dt.table_name  AS tableName,
                     dt.floor       AS floor,
                     dt.slot        AS slot
-                FROM dining_table dt
+                FROM cafe_table dt
                 WHERE dt.is_active = 1
                   AND dt.id NOT IN (
                       SELECT tb.dining_table_id

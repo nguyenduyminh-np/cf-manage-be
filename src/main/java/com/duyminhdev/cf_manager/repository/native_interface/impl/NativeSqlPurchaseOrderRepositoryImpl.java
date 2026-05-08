@@ -132,7 +132,9 @@ public class NativeSqlPurchaseOrderRepositoryImpl implements NativeSqlPurchaseOr
                     po.created_at      AS createdTime,
                     a.id               AS accountId,
                     a.full_name        AS fullName,
+                    s.id               AS supplierId,
                     s.supplier_name    AS supplierName,
+                    w.id               AS warehouseId,
                     w.warehouse_name   AS warehouseName
                 FROM purchase_order po
                 INNER JOIN account a   ON a.id  = po.account_id
@@ -155,7 +157,9 @@ public class NativeSqlPurchaseOrderRepositoryImpl implements NativeSqlPurchaseOr
                 .createdTime(NativeSqlTupleUtils.getInstant(tuple, "createdTime"))
                 .accountId(NativeSqlTupleUtils.getInteger(tuple, "accountId"))
                 .fullName(NativeSqlTupleUtils.getString(tuple, "fullName"))
+                .supplierId(NativeSqlTupleUtils.getInteger(tuple, "supplierId"))
                 .supplierName(NativeSqlTupleUtils.getString(tuple, "supplierName"))
+                .warehouseId(NativeSqlTupleUtils.getInteger(tuple, "warehouseId"))
                 .warehouseName(NativeSqlTupleUtils.getString(tuple, "warehouseName"))
                 .build());
     }
@@ -166,7 +170,9 @@ public class NativeSqlPurchaseOrderRepositoryImpl implements NativeSqlPurchaseOr
                 SELECT
                     pod.id             AS detailId,
                     i.id               AS ingredientId,
+                    i.ingredient_code  AS ingredientCode,
                     i.ingredient_name  AS ingredientName,
+                    i.supplier_id      AS supplierId,
                     pod.quantity       AS quantity,
                     pod.unit_price     AS unitPrice
                 FROM purchase_order_detail pod
@@ -181,9 +187,40 @@ public class NativeSqlPurchaseOrderRepositoryImpl implements NativeSqlPurchaseOr
         return tuples.stream().map(tuple -> PurchaseOrderItemNativeResult.builder()
                 .detailId(NativeSqlTupleUtils.getInteger(tuple, "detailId"))
                 .ingredientId(NativeSqlTupleUtils.getInteger(tuple, "ingredientId"))
+                .ingredientCode(NativeSqlTupleUtils.getString(tuple, "ingredientCode"))
                 .ingredientName(NativeSqlTupleUtils.getString(tuple, "ingredientName"))
+                .supplierId(NativeSqlTupleUtils.getInteger(tuple, "supplierId"))
                 .quantity(NativeSqlTupleUtils.getInteger(tuple, "quantity"))
                 .unitPrice(NativeSqlTupleUtils.getBigDecimal(tuple, "unitPrice"))
                 .build()).toList();
+    }
+
+    @Override
+    public List<PurchaseOrderIngredientSelectNativeResult> findIngredientsBySupplierId(Integer supplierId) {
+        String sql = """
+                SELECT
+                    i.id               AS ingredientId,
+                    i.ingredient_code  AS ingredientCode,
+                    i.ingredient_name  AS ingredientName,
+                    i.supplier_id      AS supplierId
+                FROM ingredient i
+                INNER JOIN supplier s ON s.id = i.supplier_id
+                WHERE i.is_active = 1
+                  AND s.is_active = 1
+                  AND s.id = :supplierId
+                ORDER BY i.ingredient_name ASC, i.id ASC
+                """;
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        query.setParameter("supplierId", supplierId);
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+        return tuples.stream()
+                .map(tuple -> PurchaseOrderIngredientSelectNativeResult.builder()
+                        .ingredientId(NativeSqlTupleUtils.getInteger(tuple, "ingredientId"))
+                        .ingredientCode(NativeSqlTupleUtils.getString(tuple, "ingredientCode"))
+                        .ingredientName(NativeSqlTupleUtils.getString(tuple, "ingredientName"))
+                        .supplierId(NativeSqlTupleUtils.getInteger(tuple, "supplierId"))
+                        .build())
+                .toList();
     }
 }

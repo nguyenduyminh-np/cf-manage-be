@@ -23,9 +23,27 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class IngredientCategoryServiceImpl implements IngredientCategoryService {
 
+    /**
+     * Độ sâu tối đa cho phép của cây danh mục.
+     * Cấp 1 = root (depth=1), Cấp 2 = con, Cấp 3 = cháu.
+     * Thay đổi hằng số này nếu cần mở rộng hoặc thu hẹp cây.
+     */
+    private static final int MAX_DEPTH = 3;
+
+    /**
+     * Giá trị đặc biệt trong {@link IngredientCategoryUpdateRequestDTO#getParentCategoryId()}
+     * dùng để báo hiệu "xóa cha, chuyển thành root".
+     * Client gửi parentCategoryId = -1 khi muốn bỏ cha.
+     */
+    private static final int CLEAR_PARENT_SIGNAL = -1;
+
     private final NativeSqlIngredientCategoryRepository nativeSqlRepo;
     private final IngredientCategoryRepository categoryRepository;
     private final IngredientRepository ingredientRepository;
+
+    // =========================================================================
+    // PUBLIC API
+    // =========================================================================
 
     @Override
     public PageResponse<List<IngredientCategoryResponseDTO>> search(IngredientCategorySearchRequestDTO request) {
@@ -59,10 +77,12 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
     @Override
     @Transactional
     public IngredientCategoryDetailResponseDTO create(IngredientCategoryCreateRequestDTO request) {
-        // Kiểm tra trùng mã nếu có
+        // 2.1 – Kiểm tra trùng mã (global: kể cả bản ghi inactive)
         if (StringUtils.hasText(request.getIngredientCategoryCode())) {
             categoryRepository.findByIngredientCategoryCode(request.getIngredientCategoryCode())
-                    .ifPresent(c -> { throw new InvalidDataException("Mã danh mục đã tồn tại"); });
+                    .ifPresent(c -> {
+                        throw new InvalidDataException("Mã danh mục đã tồn tại (kể cả bản ghi đã inactive)");
+                    });
         }
 
         IngredientCategory category = new IngredientCategory();
@@ -71,11 +91,18 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
         category.setCreatedTime(Instant.now());
         category.setActive(true);
 
-        // Gán danh mục cha nếu có
+        // 2.2 + 2.4 – Gán danh mục cha (nếu có)
         if (request.getParentCategoryId() != null) {
-            IngredientCategory parent = categoryRepository.findById(request.getParentCategoryId())
-                    .orElseThrow(() -> new InvalidDataException("Danh mục cha không tồn tại"));
-            // Không cho phép chọn chính nó (sẽ kiểm tra sau khi lưu, nhưng ở create thì id null nên không sao)
+            IngredientCategory parent = requireActiveCategory(request.getParentCategoryId(),
+                    "Danh mục cha không tồn tại hoặc đã bị vô hiệu hóa");
+
+            // 2.4 – Kiểm tra độ sâu: node mới sẽ ở depth = depth(parent) + 1
+            int newDepth = computeDepth(parent) + 1;
+            if (newDepth > MAX_DEPTH) {
+                throw new InvalidDataException(
+                        "Vượt quá độ sâu tối đa cho phép (" + MAX_DEPTH + " cấp)");
+            }
+
             category.setParentCategory(parent);
         }
 
@@ -89,11 +116,14 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
         IngredientCategory category = categoryRepository.findById(request.getId())
                 .orElseThrow(() -> new InvalidDataException("Danh mục không tồn tại"));
 
-        // Cập nhật mã
+        // 2.1 – Cập nhật mã: kiểm tra global unique (ngoại trừ chính nó)
         if (StringUtils.hasText(request.getIngredientCategoryCode())
                 && !request.getIngredientCategoryCode().equals(category.getIngredientCategoryCode())) {
-            categoryRepository.findByIngredientCategoryCode(request.getIngredientCategoryCode())
-                    .ifPresent(c -> { throw new InvalidDataException("Mã danh mục đã tồn tại"); });
+            categoryRepository.findByIngredientCategoryCodeAndIdNot(
+                    request.getIngredientCategoryCode(), category.getId())
+                    .ifPresent(c -> {
+                        throw new InvalidDataException("Mã danh mục đã tồn tại (kể cả bản ghi đã inactive)");
+                    });
             category.setIngredientCategoryCode(request.getIngredientCategoryCode());
         }
 
@@ -101,28 +131,53 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
             category.setIngredientCategoryName(request.getIngredientCategoryName());
         }
 
-        // Cập nhật danh mục cha
+        // 2.2 – Cập nhật danh mục cha
         if (request.getParentCategoryId() != null) {
-            if (request.getParentCategoryId().equals(category.getId())) {
-                throw new InvalidDataException("Không thể chọn chính danh mục này làm danh mục cha");
-            }
-            IngredientCategory parent = categoryRepository.findById(request.getParentCategoryId())
-                    .orElseThrow(() -> new InvalidDataException("Danh mục cha không tồn tại"));
-            category.setParentCategory(parent);
-        } else {
-            // Cho phép xóa danh mục cha (set null) nếu muốn, nhưng trong update request có thể không truyền -> giữ nguyên.
-            // DTO không phân biệt null vs không gửi, ta quy ước: nếu không gửi parentCategoryId thì giữ nguyên, nếu gửi null sẽ xóa.
-            // Tuy nhiên DTO dùng Integer, không thể phân biệt null do không truyền. Tạm thời ta sẽ chỉ cập nhật nếu field != null.
-            // Để set null ta có thể dùng một trick nhưng ít dùng. Ta sẽ bỏ qua việc set null.
-        }
+            if (request.getParentCategoryId() == CLEAR_PARENT_SIGNAL) {
+                // Client gửi -1 → xóa cha, trở thành root
+                category.setParentCategory(null);
+            } else {
+                // 2.2 – Không cho phép tự làm cha của chính mình
+                if (request.getParentCategoryId().equals(category.getId())) {
+                    throw new InvalidDataException("Không thể chọn chính danh mục này làm danh mục cha");
+                }
 
-        // Xử lý active
-        if (request.getActive() != null) {
-            if (!request.getActive() && Boolean.TRUE.equals(category.getActive())) {
-                // Kiểm tra phụ thuộc trước khi vô hiệu hóa
-                validateBeforeDeactivate(category.getId());
+                // 2.2 – Cha phải tồn tại và đang active
+                IngredientCategory parent = requireActiveCategory(request.getParentCategoryId(),
+                        "Danh mục cha không tồn tại hoặc đã bị vô hiệu hóa");
+
+                // 2.2 – Kiểm tra vòng lặp (circular reference)
+                validateNoCircularReference(category.getId(), parent);
+
+                // 2.4 – Kiểm tra độ sâu mới của toàn bộ nhánh con
+                int newParentDepth = computeDepth(parent);
+                validateSubtreeDepth(category, newParentDepth + 1);
+
+                category.setParentCategory(parent);
             }
-            category.setActive(request.getActive());
+        }
+        // Nếu request.getParentCategoryId() == null → giữ nguyên cha cũ (không thay đổi)
+
+        // 2.3 – Xử lý kích hoạt / vô hiệu hóa
+        if (request.getActive() != null) {
+            boolean currentlyActive = Boolean.TRUE.equals(category.getActive());
+
+            if (!request.getActive() && currentlyActive) {
+                // Vô hiệu hóa: cascade xuống toàn bộ con/cháu
+                // Kiểm tra nguyên liệu active
+                validateNoActiveIngredients(category.getId());
+                cascadeDeactivate(category);
+            } else if (request.getActive() && !currentlyActive) {
+                // Kích hoạt lại:
+                // 2.3 – Nếu cha đang inactive thì không cho kích hoạt
+                if (category.getParentCategory() != null
+                        && !Boolean.TRUE.equals(category.getParentCategory().getActive())) {
+                    throw new InvalidDataException(
+                            "Không thể kích hoạt vì danh mục cha đang bị vô hiệu hóa. " +
+                            "Vui lòng kích hoạt danh mục cha trước.");
+                }
+                category.setActive(true);
+            }
         }
 
         categoryRepository.save(category);
@@ -139,9 +194,11 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
             throw new InvalidDataException("Danh mục đã bị vô hiệu hóa trước đó");
         }
 
-        validateBeforeDeactivate(category.getId());
-        category.setActive(false);
-        categoryRepository.save(category);
+        // Kiểm tra nguyên liệu active thuộc chính danh mục này
+        validateNoActiveIngredients(category.getId());
+
+        // 2.3 – Cascade deactivate toàn bộ nhánh con/cháu rồi mới deactivate chính nó
+        cascadeDeactivate(category);
     }
 
     @Override
@@ -153,30 +210,117 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
 
     @Override
     public List<IngredientCategoryOptionDTO> getOptions() {
-        List<IngredientCategory> activeCategories = categoryRepository.findAllByActiveTrueOrderByIngredientCategoryNameAsc();
+        List<IngredientCategory> activeCategories =
+                categoryRepository.findAllByActiveTrueOrderByIngredientCategoryNameAsc();
         return activeCategories.stream()
                 .map(cat -> IngredientCategoryOptionDTO.builder()
                         .id(cat.getId())
                         .ingredientCategoryCode(cat.getIngredientCategoryCode())
                         .ingredientCategoryName(cat.getIngredientCategoryName())
                         .parentCategoryId(cat.getParentCategory() != null ? cat.getParentCategory().getId() : null)
-                        .parentCategoryName(cat.getParentCategory() != null ? cat.getParentCategory().getIngredientCategoryName() : null)
+                        .parentCategoryName(cat.getParentCategory() != null
+                                ? cat.getParentCategory().getIngredientCategoryName() : null)
                         .build())
                 .collect(Collectors.toList());
     }
 
-    // -------------------- private --------------------
+    // =========================================================================
+    // PRIVATE HELPERS
+    // =========================================================================
 
-    private void validateBeforeDeactivate(Integer categoryId) {
-        // Kiểm tra có danh mục con active không
-        if (categoryRepository.existsByParentCategoryIdAndActiveTrue(categoryId)) {
-            throw new InvalidDataException("Không thể vô hiệu hóa vì còn danh mục con đang hoạt động");
+    /**
+     * Lấy danh mục theo ID và yêu cầu phải đang active.
+     */
+    private IngredientCategory requireActiveCategory(Integer id, String errorMessage) {
+        IngredientCategory cat = categoryRepository.findById(id)
+                .orElseThrow(() -> new InvalidDataException(errorMessage));
+        if (!Boolean.TRUE.equals(cat.getActive())) {
+            throw new InvalidDataException(errorMessage);
         }
-        // Kiểm tra có nguyên liệu active thuộc danh mục này không
-        if (ingredientRepository.existsByIngredientCategoryIdAndActiveTrue(categoryId)) {
-            throw new InvalidDataException("Không thể vô hiệu hóa vì còn nguyên liệu đang hoạt động thuộc danh mục này");
+        return cat;
+    }
+
+    /**
+     * Kiểm tra circular reference: duyệt ngược tổ tiên của {@code newParent},
+     * nếu gặp {@code categoryId} thì có vòng lặp.
+     */
+    private void validateNoCircularReference(Integer categoryId, IngredientCategory newParent) {
+        IngredientCategory cursor = newParent;
+        while (cursor != null) {
+            if (cursor.getId().equals(categoryId)) {
+                throw new InvalidDataException(
+                        "Phát hiện vòng lặp tham chiếu: danh mục con không thể trở thành tổ tiên của cha mới");
+            }
+            cursor = cursor.getParentCategory();
         }
     }
+
+    /**
+     * Tính độ sâu (depth) của một node trong cây.
+     * Root = 1, con của root = 2, cháu = 3, ...
+     */
+    private int computeDepth(IngredientCategory cat) {
+        int depth = 1;
+        IngredientCategory cursor = cat;
+        while (cursor.getParentCategory() != null) {
+            depth++;
+            cursor = cursor.getParentCategory();
+        }
+        return depth;
+    }
+
+    /**
+     * Kiểm tra toàn bộ nhánh con của {@code node} khi đặt nó ở độ sâu
+     * {@code nodeDepth} có vượt quá MAX_DEPTH không.
+     * Duyệt BFS xuống toàn bộ cây con.
+     */
+    private void validateSubtreeDepth(IngredientCategory node, int nodeDepth) {
+        if (nodeDepth > MAX_DEPTH) {
+            throw new InvalidDataException(
+                    "Vượt quá độ sâu tối đa cho phép (" + MAX_DEPTH + " cấp) sau khi di chuyển nhánh");
+        }
+        List<IngredientCategory> children = categoryRepository.findAllByParentCategory_Id(node.getId());
+        for (IngredientCategory child : children) {
+            validateSubtreeDepth(child, nodeDepth + 1);
+        }
+    }
+
+    /**
+     * Cascade vô hiệu hóa: đặt is_active = 0 cho node và tất cả con/cháu của nó.
+     * Duyệt BFS, lưu batch sau khi xử lý từng level.
+     */
+    private void cascadeDeactivate(IngredientCategory root) {
+        Deque<IngredientCategory> queue = new ArrayDeque<>();
+        queue.add(root);
+        List<IngredientCategory> toSave = new ArrayList<>();
+
+        while (!queue.isEmpty()) {
+            IngredientCategory current = queue.poll();
+            current.setActive(false);
+            toSave.add(current);
+
+            List<IngredientCategory> children =
+                    categoryRepository.findAllByParentCategory_Id(current.getId());
+            queue.addAll(children);
+        }
+
+        categoryRepository.saveAll(toSave);
+    }
+
+    /**
+     * Kiểm tra không còn nguyên liệu active thuộc danh mục này.
+     * Nếu còn → từ chối vô hiệu hóa.
+     */
+    private void validateNoActiveIngredients(Integer categoryId) {
+        if (ingredientRepository.existsByIngredientCategoryIdAndActiveTrue(categoryId)) {
+            throw new InvalidDataException(
+                    "Không thể vô hiệu hóa vì còn nguyên liệu đang hoạt động thuộc danh mục này");
+        }
+    }
+
+    // =========================================================================
+    // MAPPING
+    // =========================================================================
 
     private IngredientCategoryDetailResponseDTO mapToDetail(IngredientCategory cat) {
         return IngredientCategoryDetailResponseDTO.builder()
@@ -186,7 +330,8 @@ public class IngredientCategoryServiceImpl implements IngredientCategoryService 
                 .createdTime(cat.getCreatedTime())
                 .active(cat.getActive())
                 .parentCategoryId(cat.getParentCategory() != null ? cat.getParentCategory().getId() : null)
-                .parentCategoryName(cat.getParentCategory() != null ? cat.getParentCategory().getIngredientCategoryName() : null)
+                .parentCategoryName(cat.getParentCategory() != null
+                        ? cat.getParentCategory().getIngredientCategoryName() : null)
                 .build();
     }
 

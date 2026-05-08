@@ -12,7 +12,8 @@ public class PurchaseOrderListItemDTO {
     private Integer id;
     private String purchaseOrderCode;
     private BigDecimal totalPrice;
-    private String paymentStatus;
+    private String paymentStatus;      // code: DRAFT, PENDING, APPROVED, COMPLETED, CANCELLED
+    private String paymentStatusName;  // label: Bản nháp, Chờ duyệt, ...
     private String accountFullName;
     private String supplierName;    // Fix #1
     private Instant createdTime;
