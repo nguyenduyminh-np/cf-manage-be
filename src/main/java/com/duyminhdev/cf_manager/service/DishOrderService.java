@@ -12,8 +12,17 @@ import java.util.List;
 
 public interface DishOrderService {
 
-    // Lấy thông tin để thanh toán
+    // Lấy thông tin để thanh toán (không có voucher)
     PaymentPreviewResponseDTO getPaymentPreview(Integer orderId);
+
+    /**
+     * Lấy thông tin preview thanh toán kèm preview voucher (READ-ONLY).
+     * Không tăng usedCount, không ghi bất kỳ dữ liệu nào.
+     *
+     * @param orderId     ID đơn hàng
+     * @param voucherCode mã voucher (null nếu không dùng)
+     */
+    PaymentPreviewResponseDTO getPaymentPreviewWithVoucher(Integer orderId, String voucherCode);
 
     /**
      * Lấy danh sách order của một bàn theo thời gian tạo giảm dần.

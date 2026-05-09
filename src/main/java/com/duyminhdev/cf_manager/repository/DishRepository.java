@@ -14,4 +14,9 @@ public interface DishRepository extends JpaRepository<Dish, Integer>, JpaSpecifi
     Optional<Dish> findByIdAndActiveTrue(Integer id);
 
     List<Dish> findAllByActiveTrueOrderByDishNameAsc();
+
+    List<Dish> findAllByDishCategory_IdAndActiveTrueOrderByDishNameAsc(Integer dishCategoryId);
+
+    List<Dish> findAllByDishCategory_IdOrderByDishNameAsc(Integer dishCategoryId);
 }
+

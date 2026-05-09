@@ -21,4 +21,8 @@ public class InvoiceDto {
     private Integer bookingId;
     private String customerName;
     private String customerPhone;
+    // ── Voucher snapshot ────────────────────────────────────────────────
+    private Integer voucherId;
+    private String voucherCode;
+    private BigDecimal discountAmount;
 }

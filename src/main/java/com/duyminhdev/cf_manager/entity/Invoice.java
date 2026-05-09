@@ -57,4 +57,22 @@ public class Invoice {
 
     @Column(name = "customer_phone", length = 20)
     private String customerPhone;
+
+    // ── Voucher snapshot (NULL nếu không dùng voucher) ────────────────────────
+
+    /**
+     * FK tới bảng voucher – dùng để truy vết chính xác ngay cả khi mã bị xóa rồi tạo lại.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "voucher_id", nullable = true,
+            foreignKey = @ForeignKey(name = "fk_invoice_voucher_id"))
+    private Voucher voucher;
+
+    /** Snapshot mã voucher tại thời điểm thanh toán – để hiển thị nhanh trên hóa đơn. */
+    @Column(name = "voucher_code", length = 50)
+    private String voucherCode;
+
+    /** Số tiền được giảm. NULL nếu không dùng voucher. */
+    @Column(name = "discount_amount", precision = 18, scale = 2)
+    private BigDecimal discountAmount;
 }

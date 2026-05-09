@@ -14,6 +14,7 @@ import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
 import com.duyminhdev.cf_manager.repository.*;
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.service.PaymentService;
+import com.duyminhdev.cf_manager.service.VoucherService;
 import com.duyminhdev.cf_manager.utils.InvoiceCodeService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final ServiceSupport serviceSupport;
     private final InvoiceCodeService invoiceCodeService;
+    private final VoucherService voucherService;
+    private final VoucherRepository voucherRepository;
 
     @Override
     public PaymentResponse processPayment(PaymentRequestDTO request) {
@@ -78,12 +81,27 @@ public class PaymentServiceImpl implements PaymentService {
         // 3. Lấy thông tin khách hàng từ booking đang hoạt động
         CustomerInfoDto customerInfo = getActiveBookingCustomer(order.getTable().getId());
 
-        // 4. Tạo hóa đơn
+        // 3b. Áp dụng voucher trong cùng transaction (nếu có)
+        BigDecimal finalAmount = totalAmount;
+        Voucher appliedVoucher = null;
+        BigDecimal discountAmount = null;
+
+        if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
+            var applied = voucherService.applyVoucher(request.getVoucherCode(), orderId, totalAmount);
+            discountAmount = applied.getDiscountAmount();
+            finalAmount = applied.getFinalAmount();
+            // Load Voucher entity để gắn FK vào Invoice/DishOrder
+            appliedVoucher = voucherRepository.findById(applied.getVoucherId()).orElse(null);
+            // Gắn voucher vào DishOrder (finalTotal và discountAmount sẽ được set ở bước 7)
+            order.setVoucher(appliedVoucher);
+        }
+
+        // 4. Tạo hóa đơn (dùng finalAmount sau khi đã trừ voucher)
         Account cashier = serviceSupport.getCurrentAccount();
         String invoiceCode = invoiceCodeService.generateInvoiceCode();
         Invoice invoice = Invoice.builder()
                 .invoiceCode(invoiceCode)
-                .totalMoney(totalAmount)
+                .totalMoney(finalAmount)             // ← finalAmount sau voucher
                 .paymentStatus(PaymentStatusEnum.PAID.name())
                 .paymentMethod(paymentMethod.getLabel()) // "Tiền mặt" / "Chuyển khoản"
                 .createdTime(Instant.now())
@@ -95,6 +113,10 @@ public class PaymentServiceImpl implements PaymentService {
                         tableBookingRepository.findById(customerInfo.getBookingId()).orElse(null) : null)
                 .customerName(customerInfo.getCustomerName())
                 .customerPhone(customerInfo.getPhoneNumber())
+                // ── Voucher snapshot ─────────────────────────────────────────
+                .voucher(appliedVoucher)
+                .voucherCode(appliedVoucher != null ? appliedVoucher.getCode() : null)
+                .discountAmount(discountAmount)
                 .build();
         invoice = invoiceRepository.save(invoice);
 
@@ -112,9 +134,9 @@ public class PaymentServiceImpl implements PaymentService {
             invoiceDetails.add(invoiceDetailRepository.save(detail));
         }
 
-        // 6. Ghi nhận dòng tiền
+        // 6. Ghi nhận dòng tiền (theo finalAmount)
         CashFlow cashFlow = CashFlow.builder()
-                .totalMoney(totalAmount)
+                .totalMoney(finalAmount)
                 .flowType(FlowTypeEnum.INCOME.name())
                 .note("Thanh toán hóa đơn " + invoiceCode)
                 .createdTime(Instant.now())
@@ -123,11 +145,13 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
         cashFlow = cashFlowRepository.save(cashFlow);
 
-        // 7. Cập nhật trạng thái đơn hàng thành PAID
+        // 7. Cập nhật DishOrder: status PAID + voucher fields
         DishOrderStatus paidStatus = dishOrderStatusRepository
                 .findByDishOrderStatusCode(DishOrderStatusCodeEnum.PAID.getCode())
                 .orElseThrow(() -> new IllegalStateException("Không tìm thấy trạng thái PAID"));
         order.setStatus(paidStatus);
+        order.setDiscountAmount(discountAmount);
+        order.setFinalTotal(finalAmount);
         dishOrderRepository.save(order);
 
         // 8. Đồng bộ trạng thái bàn (có thể giải phóng nếu không còn order unfinished)
@@ -210,18 +234,33 @@ public class PaymentServiceImpl implements PaymentService {
         }
         dishOrderDetailRepository.saveAll(details);
 
-        // Cập nhật totalBill cho DishOrder
-        savedOrder.setTotalBill(totalAmount);
-        dishOrderRepository.save(savedOrder);
-
         // ── 6. Lấy thông tin khách hàng từ booking đang hoạt động ─────────────
         CustomerInfoDto customerInfo = getActiveBookingCustomer(table.getId());
+
+        // ── 6b. Áp dụng voucher trong cùng transaction (nếu có) ──────────────
+        BigDecimal finalAmount = totalAmount;
+        Voucher appliedVoucher = null;
+        BigDecimal discountAmount = null;
+
+        if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
+            var applied = voucherService.applyVoucher(request.getVoucherCode(), savedOrder.getId(), totalAmount);
+            discountAmount = applied.getDiscountAmount();
+            finalAmount = applied.getFinalAmount();
+            appliedVoucher = voucherRepository.findById(applied.getVoucherId()).orElse(null);
+            savedOrder.setVoucher(appliedVoucher);
+        }
+
+        // Cập nhật totalBill (gốc) + discount fields cho DishOrder
+        savedOrder.setTotalBill(totalAmount);
+        savedOrder.setDiscountAmount(discountAmount);
+        savedOrder.setFinalTotal(finalAmount);
+        dishOrderRepository.save(savedOrder);
 
         // ── 7. Tạo Invoice ────────────────────────────────────────────────────
         String invoiceCode = invoiceCodeService.generateInvoiceCode();
         Invoice invoice = Invoice.builder()
                 .invoiceCode(invoiceCode)
-                .totalMoney(totalAmount)
+                .totalMoney(finalAmount)             // ← finalAmount sau voucher
                 .paymentStatus(PaymentStatusEnum.PAID.name())
                 .paymentMethod(paymentMethod.getLabel())
                 .createdTime(Instant.now())
@@ -234,6 +273,10 @@ public class PaymentServiceImpl implements PaymentService {
                         : null)
                 .customerName(customerInfo.getCustomerName())
                 .customerPhone(customerInfo.getPhoneNumber())
+                // ── Voucher snapshot ─────────────────────────────────────────
+                .voucher(appliedVoucher)
+                .voucherCode(appliedVoucher != null ? appliedVoucher.getCode() : null)
+                .discountAmount(discountAmount)
                 .build();
         invoice = invoiceRepository.save(invoice);
 
@@ -251,9 +294,9 @@ public class PaymentServiceImpl implements PaymentService {
             invoiceDetails.add(invoiceDetailRepository.save(invDetail));
         }
 
-        // ── 9. Ghi nhận dòng tiền thu vào ────────────────────────────────────
+        // ── 9. Ghi nhận dòng tiền thu vào (theo finalAmount) ─────────────────
         CashFlow cashFlow = CashFlow.builder()
-                .totalMoney(totalAmount)
+                .totalMoney(finalAmount)
                 .flowType(FlowTypeEnum.INCOME.name())
                 .note("Thanh toán hóa đơn " + invoiceCode)
                 .createdTime(Instant.now())
@@ -313,6 +356,10 @@ public class PaymentServiceImpl implements PaymentService {
                 .bookingId(invoice.getBooking() != null ? invoice.getBooking().getId() : null)
                 .customerName(invoice.getCustomerName())
                 .customerPhone(invoice.getCustomerPhone())
+                // ── Voucher snapshot ─────────────────────────────────────────
+                .voucherId(invoice.getVoucher() != null ? invoice.getVoucher().getId() : null)
+                .voucherCode(invoice.getVoucherCode())
+                .discountAmount(invoice.getDiscountAmount())
                 .build();
     }
 

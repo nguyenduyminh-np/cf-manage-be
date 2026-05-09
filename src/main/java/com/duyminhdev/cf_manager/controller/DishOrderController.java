@@ -12,10 +12,13 @@ import com.duyminhdev.cf_manager.service.DishOrderService;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -107,5 +110,31 @@ public class DishOrderController {
             @Valid @RequestBody DishOrderStatusUpdateRequestDTO request
     ) {
         return new ApiResponse<>(200, "UPDATE_DISH_ORDER_STATUS_SUCCESS", dishOrderService.updateStatus(request));
+    }
+
+    /**
+     * Preview thông tin thanh toán (không có voucher).
+     */
+    @PostMapping("/payment/preview")
+    public ApiResponse<?> getPaymentPreview(
+            @NotNull @Positive @RequestParam Integer orderId
+    ) {
+        return new ApiResponse<>(200, "GET_PAYMENT_PREVIEW_SUCCESS",
+                dishOrderService.getPaymentPreview(orderId));
+    }
+
+    /**
+     * Preview thông tin thanh toán kèm preview mã voucher (READ-ONLY).
+     * Nhân viên nhập mã voucher trước khi bấm thanh toán;
+     * endpoint này trả về số tiền giảm và finalAmount để FE hiển thị.
+     * Không tăng usedCount, không ghi bất kỳ dữ liệu nào.
+     */
+    @PostMapping("/payment/preview-with-voucher")
+    public ApiResponse<?> getPaymentPreviewWithVoucher(
+            @NotNull @Positive @RequestParam Integer orderId,
+            @RequestParam(required = false) String voucherCode
+    ) {
+        return new ApiResponse<>(200, "GET_PAYMENT_PREVIEW_WITH_VOUCHER_SUCCESS",
+                dishOrderService.getPaymentPreviewWithVoucher(orderId, voucherCode));
     }
 }

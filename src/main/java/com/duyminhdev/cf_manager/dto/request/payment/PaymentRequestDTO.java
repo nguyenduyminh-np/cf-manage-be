@@ -12,4 +12,10 @@ public class PaymentRequestDTO {
     @NotNull(message = "Phương thức thanh toán không được để trống")
     @Pattern(regexp = "CASH|BANK_TRANSFER", message = "Phương thức thanh toán không hợp lệ")
     private String paymentMethod;
+
+    /**
+     * Mã voucher giảm giá (tùy chọn).
+     * Nếu được cung cấp, sẽ được validate và áp dụng khi thanh toán.
+     */
+    private String voucherCode;
 }

@@ -21,21 +21,11 @@ public class AiChatController {
     private final AiChatService aiChatService;
 
     /**
-     * Endpoint public dành cho khách hàng vãng lai.
-     * Không cần JWT. Có thể tra cứu thực đơn, bàn trống, FAQ.
-     */
-    @PostMapping("/public")
-    public ApiResponse<ChatResponse> publicChat(@Valid @RequestBody ChatRequest request) {
-        ChatResponse response = aiChatService.processChat(request, null);
-        return new ApiResponse<>(200, "SUCCESS", response);
-    }
-
-    /**
      * Endpoint dành cho nhân viên.
      * Yêu cầu JWT. Có các quyền mở rộng như xem doanh thu, xem tồn kho.
      */
     @PostMapping("/staff")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QL', 'PC', 'PV')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ApiResponse<ChatResponse> staffChat(
             @Valid @RequestBody ChatRequest request,
             Authentication authentication) {

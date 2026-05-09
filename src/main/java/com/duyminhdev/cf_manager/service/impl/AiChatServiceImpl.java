@@ -13,12 +13,16 @@ import com.duyminhdev.cf_manager.repository.ConversationMessageRepository;
 import com.duyminhdev.cf_manager.repository.UserPreferenceRepository;
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlChatRepository;
 import com.duyminhdev.cf_manager.service.AiChatService;
+import com.duyminhdev.cf_manager.tools.ChatToolAuthFilter;
+import com.duyminhdev.cf_manager.tools.ChatToolFunctions;
 import com.duyminhdev.cf_manager.utils.chat.BookingParser;
 import com.duyminhdev.cf_manager.utils.chat.ChatTimeUtils;
 import com.duyminhdev.cf_manager.utils.chat.TableQueryParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.Authentication;
@@ -27,13 +31,31 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
+/**
+ * Service chính xử lý nghiệp vụ AI Chatbot.
+ * <p>
+ * Kiến trúc v2 — Dual-mode:
+ * <ul>
+ *   <li><b>AI Mode (mặc định):</b> Sử dụng Gemini Function Calling với {@link ChatToolFunctions}.
+ *       AI tự quyết định gọi tool nào dựa trên ngữ cảnh tin nhắn.</li>
+ *   <li><b>Regex Fallback:</b> Khi AI bị disable hoặc quota exceeded, tự động chuyển về
+ *       xử lý rule-based với regex pattern (giữ nguyên logic v1).</li>
+ * </ul>
+ * <p>
+ * Flow xử lý:
+ * <pre>
+ * User message → Save history → AI enabled?
+ *   ├─ Yes → Build context + Filter tools by role → Gemini + Tool Calling → Response
+ *   └─ No  → Regex detect intent → Handler → Response
+ *            (hoặc khi AI gặp lỗi, tự động fallback về đây)
+ * </pre>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -47,6 +69,10 @@ public class AiChatServiceImpl implements AiChatService {
     private final CafeInfoProperties cafeInfoProperties;
     private final StringRedisTemplate redisTemplate;
 
+    // ===== v2: Tool Calling dependencies =====
+    private final ChatToolFunctions chatToolFunctions;
+    private final ChatToolAuthFilter toolAuthFilter;
+
     @Value("${chat.ai.enabled:true}")
     private boolean aiEnabled;
 
@@ -58,7 +84,7 @@ public class AiChatServiceImpl implements AiChatService {
 
     private volatile long aiQuotaBackoffUntilMs = 0;
 
-    // Regex Intent Rules
+    // ===== Regex Intent Rules (giữ nguyên v1 cho fallback) =====
     private static final Pattern INTENT_TABLE_AVAIL = Pattern.compile("trống|còn bàn|bàn nào", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern INTENT_BOOK_TABLE = Pattern.compile("đặt bàn|book bàn|giữ bàn", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern INTENT_MENU = Pattern.compile("thực đơn|menu|có món|loại|đồ uống", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
@@ -67,6 +93,10 @@ public class AiChatServiceImpl implements AiChatService {
     private static final Pattern INTENT_PURCHASE = Pattern.compile("nhập hàng|tạo đơn nhập", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern INTENT_FAQ = Pattern.compile("mở cửa|đóng cửa|địa chỉ|ở đâu|wifi|đỗ xe|giữ xe|pass wifi", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
+
+    // =========================================================================
+    // MAIN ENTRY POINT
+    // =========================================================================
 
     @Override
     @Transactional
@@ -78,45 +108,159 @@ public class AiChatServiceImpl implements AiChatService {
         // 1. Lưu tin nhắn user
         saveMessage(userId, sessionId, "user", message);
 
-        // 2. Detect Intent (Rule-based)
-        IntentType intent = detectIntent(message);
-        String reply = null;
+        String reply;
+        String intentType = null;
 
-        // 3. Dispatch to Handlers
-        switch (intent) {
-            case TABLE_AVAILABILITY -> reply = handleTableAvailability(message);
-            case BOOK_TABLE -> reply = handleBookTable(message, authentication);
-            case MENU_QUERY -> reply = handleMenuQuery(message);
-            case SALES_REPORT -> reply = handleSalesReport(message, authentication);
-            case INVENTORY_CHECK -> reply = handleInventoryCheck(message, authentication);
-            case CREATE_PURCHASE_ORDER -> reply = handleCreatePurchaseOrder(message, authentication);
-            case FAQ -> reply = null; // Let AI handle FAQ entirely based on System prompt
-            default -> reply = null;  // Unknown -> AI Fallback
+        // 2. Chọn mode xử lý
+        if (aiEnabled && System.currentTimeMillis() >= aiQuotaBackoffUntilMs) {
+            // ===== V2: AI-driven with Tool Calling =====
+            reply = callAIWithTools(message, userId, sessionId, authentication);
+
+            if (!StringUtils.hasText(reply)) {
+                // AI thất bại → fallback về regex
+                log.warn("AI tool calling returned empty, falling back to regex");
+                IntentType intent = detectIntent(message);
+                intentType = intent.name();
+                reply = handleByRegex(message, intent, authentication);
+            }
+        } else {
+            // ===== V1 Fallback: Regex-based =====
+            IntentType intent = detectIntent(message);
+            intentType = intent.name();
+            reply = handleByRegex(message, intent, authentication);
         }
 
-        // 4. AI Fallback for complex queries, FAQ, or when intent handlers don't have enough data
+        // 3. Hard fallback nếu vẫn không có reply
         if (!StringUtils.hasText(reply)) {
-            reply = callAIWithContext(message, userId, sessionId);
+            reply = "Xin lỗi, hệ thống AI hiện đang bận hoặc tôi chưa hiểu ý bạn. "
+                    + "Vui lòng thử lại sau hoặc diễn đạt cách khác.";
         }
 
-        // 5. Hard Fallback if AI fails (e.g. quota exceeded)
-        if (!StringUtils.hasText(reply)) {
-            reply = hardFallbackReply(intent);
-        }
-
-        // 6. Lưu tin nhắn assistant
+        // 4. Lưu tin nhắn assistant
         saveMessage(userId, sessionId, "assistant", reply);
 
-        // 7. Cập nhật User Preferences (chạy bất đồng bộ hoặc chạy nhẹ sau khi chat)
-        updateUserPreferences(userId, message, intent);
+        // 5. Cập nhật User Preferences
+        updateUserPreferences(userId, message, detectIntent(message));
 
         return ChatResponse.builder()
                 .reply(reply)
                 .sessionId(sessionId)
-                .intentType(intent.name())
+                .intentType(intentType)
                 .timestamp(Instant.now())
                 .build();
     }
+
+
+    // =========================================================================
+    // V2: AI + TOOL CALLING
+    // =========================================================================
+
+    /**
+     * Gọi Gemini với Tool Calling.
+     * Tools được lọc theo role của user qua {@link ChatToolAuthFilter}.
+     * Context (lịch sử chat, sở thích) được inject vào user prompt.
+     */
+    private String callAIWithTools(String message, String userId, String sessionId,
+                                   Authentication auth) {
+        try {
+            // Build user prompt kèm context
+            String userPrompt = buildUserPromptWithContext(message, userId, sessionId);
+
+            // Lọc tool callbacks theo role
+            Set<String> allowedToolNames = toolAuthFilter.getAllowedToolNames(auth);
+            ToolCallback[] allCallbacks = ToolCallbacks.from(chatToolFunctions);
+            ToolCallback[] filteredTools = filterToolCallbacks(allCallbacks, allowedToolNames);
+
+            log.debug("AI call with {} tools for user {}", filteredTools.length, userId);
+
+            return chatClient.prompt()
+                    .user(userPrompt)
+                    .toolCallbacks(filteredTools)
+                    .call()
+                    .content();
+        } catch (Exception e) {
+            log.error("AI call with tools failed: {}", e.getMessage(), e);
+            if (isQuotaExceeded(e)) {
+                aiQuotaBackoffUntilMs = System.currentTimeMillis() + quotaBackoffMs;
+                log.warn("AI quota exceeded, backing off for {}ms", quotaBackoffMs);
+            }
+            return null; // Sẽ fallback về regex
+        }
+    }
+
+    /**
+     * Lọc ToolCallback[] theo tên tool được phép.
+     */
+    private ToolCallback[] filterToolCallbacks(ToolCallback[] allCallbacks, Set<String> allowedNames) {
+        return java.util.Arrays.stream(allCallbacks)
+                .filter(tc -> allowedNames.contains(tc.getToolDefinition().name()))
+                .toArray(ToolCallback[]::new);
+    }
+
+    /**
+     * Build user prompt kèm context: sở thích, lịch sử chat.
+     * System prompt (quy tắc, thông tin quán) đã được set mặc định trong AiConfig.
+     */
+    private String buildUserPromptWithContext(String message, String userId, String sessionId) {
+        StringBuilder prompt = new StringBuilder();
+
+        // Sở thích khách hàng
+        preferenceRepo.findByUserId(userId).ifPresent(pref -> {
+            prompt.append("[SỞ THÍCH KHÁCH HÀNG] ");
+            if (pref.getPreferredTableFloor() != null) {
+                prompt.append("Thích ngồi tầng ").append(pref.getPreferredTableFloor()).append(". ");
+            }
+            if (pref.getPreferredDishType() != null) {
+                prompt.append("Thích ").append(pref.getPreferredDishType()).append(". ");
+            }
+            if (pref.getPreferredPriceRange() != null) {
+                prompt.append("Mức giá: ").append(pref.getPreferredPriceRange()).append(". ");
+            }
+            prompt.append("\n");
+        });
+
+        // Lịch sử chat (context window)
+        List<ConversationMessage> history = conversationRepo
+                .findTop10ByUserIdAndSessionIdOrderByCreatedAtAsc(userId, sessionId);
+        if (!history.isEmpty()) {
+            prompt.append("[LỊCH SỬ CHAT GẦN ĐÂY]\n");
+            for (ConversationMessage msg : history) {
+                prompt.append(msg.getRole().equals("user") ? "Khách: " : "Bot: ")
+                      .append(msg.getContent()).append("\n");
+            }
+            prompt.append("\n");
+        }
+
+        prompt.append("Câu hỏi hiện tại: ").append(message);
+        return prompt.toString();
+    }
+
+
+    // =========================================================================
+    // V1: REGEX FALLBACK (giữ nguyên logic cũ)
+    // =========================================================================
+
+    /**
+     * Xử lý tin nhắn bằng regex rule-based (v1).
+     * Được sử dụng khi AI bị disable hoặc gặp lỗi.
+     */
+    private String handleByRegex(String message, IntentType intent, Authentication auth) {
+        return switch (intent) {
+            case TABLE_AVAILABILITY -> handleTableAvailability(message);
+            case BOOK_TABLE -> handleBookTable(message, auth);
+            case MENU_QUERY -> null; // Không hỗ trợ menu query trong regex mode
+            case SALES_REPORT -> handleSalesReport(message, auth);
+            case INVENTORY_CHECK -> handleInventoryCheck(message, auth);
+            case CREATE_PURCHASE_ORDER -> handleCreatePurchaseOrder(message, auth);
+            case FAQ -> hardFallbackReply(intent);
+            case UNKNOWN -> hardFallbackReply(intent);
+        };
+    }
+
+
+    // =========================================================================
+    // HELPER METHODS (giữ nguyên từ v1)
+    // =========================================================================
 
     private String resolveUserId(Authentication auth, String clientUserId) {
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
@@ -161,26 +305,20 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     // ==========================================
-    // Intent Handlers
+    // Regex Intent Handlers (v1 — giữ nguyên)
     // ==========================================
 
     private String handleTableAvailability(String message) {
         TableQueryParser.TableQueryParams params = TableQueryParser.parse(message);
         if (params == null || params.getStartTime() == null || params.getEndTime() == null) {
-            return null; // Fallback to AI for clarification
+            return null; // Fallback to hard reply
         }
 
         Instant start = params.startInstant();
         Instant end = params.endInstant();
-        
-        // Cache Key format: avail_floor_start_end
-        String cacheKey = String.format("chat:avail:%s:%s:%s",
-                params.getFloor() != null ? params.getFloor() : "all",
-                start.getEpochSecond(), end.getEpochSecond());
 
-        // We can use a simple RedisTemplate caching strategy, or just let AI generate a response based on raw data
         List<TableAvailabilityDTO> tables = nativeSqlChatRepository.findAvailableTables(params.getFloor(), start, end);
-        
+
         if (tables.isEmpty()) {
             return String.format("Rất tiếc, hiện không còn bàn trống %s từ %s đến %s ạ.",
                     (params.getFloor() != null ? "tầng " + params.getFloor() : ""),
@@ -208,27 +346,23 @@ public class AiChatServiceImpl implements AiChatService {
 
     private String handleBookTable(String message, Authentication auth) {
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-            return "Dạ, để đặt bàn qua chat, bạn vui lòng đăng nhập vào tài khoản nhân viên ạ. Khách hàng vui lòng liên hệ hotline hoặc dùng chức năng đặt bàn trên web.";
+            return "Dạ, để đặt bàn qua chat, bạn vui lòng đăng nhập vào tài khoản nhân viên ạ. "
+                    + "Khách hàng vui lòng liên hệ hotline hoặc dùng chức năng đặt bàn trên web.";
         }
 
         BookingParser.BookingParseResult result = BookingParser.parse(message);
         if (result == null || !result.hasRequiredInfo()) {
-            return "Bạn muốn đặt bàn cho mấy người và vào thời gian nào ạ? Vui lòng cung cấp chi tiết (VD: Đặt bàn 4 người tối nay lúc 19h cho anh A).";
+            return "Bạn muốn đặt bàn cho mấy người và vào thời gian nào ạ? "
+                    + "Vui lòng cung cấp chi tiết (VD: Đặt bàn 4 người tối nay lúc 19h cho anh A).";
         }
 
-        // Tạm thời trả về raw string, tích hợp TableBookingService thực tế sẽ gọi .create() tại đây
-        // Phải đảm bảo logic dependency không gây vòng lặp
-        return String.format("Chức năng đặt bàn tự động đang được hoàn thiện. Hệ thống ghi nhận yêu cầu: Đặt bàn cho %s (%s), %d người, %s lúc %s.",
+        return String.format("Chức năng đặt bàn tự động đang được hoàn thiện. "
+                        + "Hệ thống ghi nhận yêu cầu: Đặt bàn cho %s (%s), %d người, %s lúc %s.",
                 result.getCustomerName() != null ? result.getCustomerName() : "Khách",
                 result.getPhoneNumber() != null ? result.getPhoneNumber() : "Không có SĐT",
                 result.getGuestCount() != null ? result.getGuestCount() : 2,
                 result.getPreferredFloor() != null ? "tầng " + result.getPreferredFloor() : "tầng trệt",
                 ChatTimeUtils.format(result.getExpectedArriveTime()));
-    }
-
-    private String handleMenuQuery(String message) {
-        // Fallback lên AI để AI đọc context menu từ prompt (cách tiếp cận đơn giản phase 1)
-        return null; 
     }
 
     private boolean hasRole(Authentication auth, String... roles) {
@@ -248,7 +382,6 @@ public class AiChatServiceImpl implements AiChatService {
             return "Xin lỗi, chỉ có Quản lý hoặc Admin mới có quyền xem báo cáo doanh thu.";
         }
 
-        // Đơn giản hóa: luôn báo cáo doanh thu hôm nay
         Instant start = ChatTimeUtils.startOfToday();
         Instant end = ChatTimeUtils.endOfToday();
         SalesSummaryDTO summary = nativeSqlChatRepository.getSalesSummary(start, end);
@@ -284,56 +417,6 @@ public class AiChatServiceImpl implements AiChatService {
             return "Xin lỗi, chỉ có Quản lý hoặc Admin mới có quyền tạo đơn nhập hàng.";
         }
         return "Tính năng tạo đơn nhập hàng bằng AI đang trong giai đoạn phát triển.";
-    }
-
-    // ==========================================
-    // AI Fallback Generation
-    // ==========================================
-
-    private String callAIWithContext(String message, String userId, String sessionId) {
-        if (!aiEnabled || System.currentTimeMillis() < aiQuotaBackoffUntilMs) {
-            return null; // Quota exceeded or disabled, use hard fallback
-        }
-
-        String prompt = buildSystemPrompt(userId, sessionId) + "\n\nUser: " + message;
-
-        try {
-            return chatClient.prompt().user(prompt).call().content();
-        } catch (Exception e) {
-            log.error("AI call failed: {}", e.getMessage());
-            if (isQuotaExceeded(e)) {
-                aiQuotaBackoffUntilMs = System.currentTimeMillis() + quotaBackoffMs;
-            }
-            return null;
-        }
-    }
-
-    private String buildSystemPrompt(String userId, String sessionId) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Bạn là nhân viên lễ tân/chăm sóc khách hàng thân thiện của quán cà phê.\n");
-        prompt.append("Hãy trả lời ngắn gọn, lịch sự, đúng trọng tâm bằng tiếng Việt.\n");
-        
-        // Thông tin quán
-        prompt.append(cafeInfoProperties.toSystemPromptSnippet()).append("\n");
-
-        // Preferences
-        preferenceRepo.findByUserId(userId).ifPresent(pref -> {
-            if (pref.getPreferredTableFloor() != null) {
-                prompt.append("Ghi chú: Khách này thích ngồi tầng ").append(pref.getPreferredTableFloor()).append(".\n");
-            }
-        });
-
-        // Lịch sử chat (Context)
-        List<ConversationMessage> history = conversationRepo.findTop10ByUserIdAndSessionIdOrderByCreatedAtAsc(userId, sessionId);
-        if (!history.isEmpty()) {
-            prompt.append("\n=== LỊCH SỬ TRÒ CHUYỆN ===\n");
-            for (ConversationMessage msg : history) {
-                prompt.append(msg.getRole().equals("user") ? "User: " : "Bạn: ")
-                      .append(msg.getContent()).append("\n");
-            }
-        }
-        
-        return prompt.toString();
     }
 
     private String hardFallbackReply(IntentType intent) {

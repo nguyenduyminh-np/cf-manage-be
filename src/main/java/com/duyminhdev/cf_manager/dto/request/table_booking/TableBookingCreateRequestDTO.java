@@ -28,7 +28,9 @@ public class TableBookingCreateRequestDTO {
     @Size(max = 255, message = "Tên khách hàng không được vượt quá 255 ký tự")
     private String customerName;
 
-    @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Số điện thoại không đúng định dạng")
+  //  @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Số điện thoại không đúng định dạng")
+    @Min(value = 1, message = "Lỗi sdt")
+    @Max(value = 15, message = "Lỗi sdt")
     private String phoneNumber;
 
     @JsonAlias("deposit")

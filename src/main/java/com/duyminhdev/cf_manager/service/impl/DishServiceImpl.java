@@ -37,15 +37,24 @@ public class DishServiceImpl implements DishService {
     @Override
     public List<DishResponseDTO> getAll(DishListRequestDTO request) {
         List<Dish> dishes;
-        if (request.getActive() == null || request.getActive()) {
-            dishes = dishRepository.findAllByActiveTrueOrderByDishNameAsc();
+        boolean onlyActive = request.getActive() == null || request.getActive();
+        Integer categoryId = request.getDishCategoryId();
+
+        if (categoryId != null) {
+            dishes = onlyActive
+                    ? dishRepository.findAllByDishCategory_IdAndActiveTrueOrderByDishNameAsc(categoryId)
+                    : dishRepository.findAllByDishCategory_IdOrderByDishNameAsc(categoryId);
         } else {
-            dishes = dishRepository.findAll(Sort.by(Sort.Direction.ASC, "dishName"));
+            dishes = onlyActive
+                    ? dishRepository.findAllByActiveTrueOrderByDishNameAsc()
+                    : dishRepository.findAll(Sort.by(Sort.Direction.ASC, "dishName"));
         }
+
         return dishes.stream()
                 .map(dishMapper::toResponseDTO)
                 .toList();
     }
+
 
     @Override
     public PageResponse<List<DishResponseDTO>> search(DishSearchRequestDTO request) {

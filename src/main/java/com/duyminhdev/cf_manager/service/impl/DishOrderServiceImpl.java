@@ -20,6 +20,7 @@ import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlDishReposi
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.repository.native_interface.impl.NativeSqlOrderHistoryRepositoryImpl;
 import com.duyminhdev.cf_manager.service.DishOrderService;
+import com.duyminhdev.cf_manager.service.VoucherService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -46,10 +47,16 @@ public class DishOrderServiceImpl implements DishOrderService {
 
     private final DishOrderMapper dishOrderMapper;
     private final ServiceSupport serviceSupport;
+    private final VoucherService voucherService;
 
 
     @Override
     public PaymentPreviewResponseDTO getPaymentPreview(Integer orderId) {
+        return getPaymentPreviewWithVoucher(orderId, null);
+    }
+
+    @Override
+    public PaymentPreviewResponseDTO getPaymentPreviewWithVoucher(Integer orderId, String voucherCode) {
         // 1. Lấy đơn hàng
         DishOrder order = dishOrderRepository.findByIdAndActiveTrue(orderId).orElseThrow(() -> new InvalidDataException("Khong tim thay don hang de thanh toan với id"+ orderId));
 
@@ -104,6 +111,19 @@ public class DishOrderServiceImpl implements DishOrderService {
 
         // 8. Thông tin khách hàng từ booking đang hoạt động
         CustomerInfoDto customerInfo = buildCustomerInfo(table.getId());
+
+        // 9. Preview voucher (READ-ONLY – không tăng usedCount)
+        BigDecimal discountAmount = null;
+        BigDecimal finalAmount = totalAmount;
+        String appliedVoucherCode = null;
+
+        if (voucherCode != null && !voucherCode.isBlank()) {
+            var preview = voucherService.previewVoucher(voucherCode, totalAmount);
+            discountAmount = preview.getDiscountAmount();
+            finalAmount = preview.getFinalAmount();
+            appliedVoucherCode = preview.getVoucherCode();
+        }
+
         return PaymentPreviewResponseDTO.builder()
                 .orderId(order.getId())
                 .orderCreatedAt(order.getCreatedTime())
@@ -112,6 +132,9 @@ public class DishOrderServiceImpl implements DishOrderService {
                 .customer(customerInfo)
                 .items(items)
                 .totalAmount(totalAmount)
+                .voucherCode(appliedVoucherCode)
+                .discountAmount(discountAmount)
+                .finalAmount(finalAmount)
                 .suggestedPaymentMethods(List.of(
                         PaymentMethodEnum.CASH.name(),
                         PaymentMethodEnum.BANK_TRANSFER.name()))
@@ -311,6 +334,8 @@ public class DishOrderServiceImpl implements DishOrderService {
         serviceSupport.validateDishOrderStatusCode(request.getDishOrderStatus());
 
         DishOrderStatus newStatus = serviceSupport.getDishOrderStatusByCode(request.getDishOrderStatus());
+        boolean isCancel = DishOrderStatusCodeEnum.CANCEL.getCode()
+                .equalsIgnoreCase(request.getDishOrderStatus());
 
         for (Integer dishOrderId : request.getDishOrderIds()) {
             DishOrder existing = dishOrderRepository.findByIdAndActiveTrue(dishOrderId)
@@ -318,10 +343,13 @@ public class DishOrderServiceImpl implements DishOrderService {
                             "Dish order not found with id: " + dishOrderId
                     ));
 
+            // Hoàn voucher nếu hủy đơn (trong cùng transaction)
+            if (isCancel) {
+                voucherService.releaseVoucher(dishOrderId);
+            }
+
             existing.setStatus(newStatus);
             dishOrderRepository.save(existing);
-
-            // serviceSupport.recomputeAndSyncTableStatus(existing.getTable().getId());
         }
 
         return true;

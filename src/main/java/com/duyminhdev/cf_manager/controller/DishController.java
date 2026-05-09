@@ -25,12 +25,12 @@ public class DishController {
 
     private final DishService dishService;
 
-    // @PostMapping("/list")
-    // public ApiResponse<List<DishResponseDTO>> list(
-    //         @RequestBody(required = false) DishListRequestDTO request) {
-    //     DishListRequestDTO safeRequest = request != null ? request : new DishListRequestDTO();
-    //     return new ApiResponse<>(200, "GET_DISH_LIST_SUCCESS", dishService.getAll(safeRequest));
-    // }
+    @PostMapping("/list")
+    public ApiResponse<List<DishResponseDTO>> list(
+            @RequestBody(required = false) DishListRequestDTO request) {
+        DishListRequestDTO safeRequest = request != null ? request : new DishListRequestDTO();
+        return new ApiResponse<>(200, "GET_DISH_LIST_SUCCESS", dishService.getAll(safeRequest));
+    }
 
     @PostMapping("/search")
     public ApiResponse<PageResponse<List<DishResponseDTO>>> search(
