@@ -125,16 +125,35 @@ public class BookingMutationAfterCommitListener {
             TableEntity table,
             String eventName
     ) {
+        String tableCode = table != null ? table.getTableCode() : "?";
+        Integer bookingId = event.getBookingId();
+
+        String message = switch (event.getMutationType()) {
+            case CREATE              -> "Booking #" + bookingId + " được tạo mới tại bàn " + tableCode;
+            case UPDATE              -> "Booking #" + bookingId + " đã được cập nhật";
+            case UPDATE_STATUS       -> "Trạng thái booking #" + bookingId + " đã thay đổi";
+            case CONFIRM             -> "Booking #" + bookingId + " đã được xác nhận — bàn " + tableCode;
+            case CHECK_IN            -> "Khách đã check-in booking #" + bookingId + " tại bàn " + tableCode;
+            case CHECK_OUT           -> "Khách đã check-out booking #" + bookingId + " — bàn " + tableCode + " trống";
+            case CANCEL              -> "Booking #" + bookingId + " đã bị hủy — bàn " + tableCode + " trống";
+            case EXPIRE              -> "Booking #" + bookingId + " đã hết hạn";
+            case EXTEND              -> "Booking #" + bookingId + " được gia hạn thêm giờ";
+            case WALK_IN             -> "Khách vãng lai ngồi bàn " + tableCode + " (booking #" + bookingId + ")";
+            case LATE_ARRIVAL_WALK_IN-> "Khách đến muộn — walk-in bàn " + tableCode + " (booking #" + bookingId + ")";
+            case CANCEL_NO_ORDER_TIMEOUT -> "Booking #" + bookingId + " tự động hủy — không gọi món";
+            case DEPOSIT             -> "Booking #" + bookingId + " đã thanh toán tiền cọc";
+        };
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("event", eventName);
         payload.put("mutationType", event.getMutationType().name());
-        payload.put("bookingId", event.getBookingId());
+        payload.put("bookingId", bookingId);
         payload.put("tableId", resolveTableId(event, booking));
-        payload.put("tableCode", table != null ? table.getTableCode() : null);
+        payload.put("tableCode", tableCode.equals("?") ? null : tableCode);
         payload.put("tableStatus", table != null ? table.getTableStatus() : null);
         payload.put("bookingStatus", booking != null ? booking.getBookingStatus() : null);
         payload.put("at", event.getOccurredAt());
-        payload.put("message", "Booking mutation committed: " + eventName);
+        payload.put("message", message);
         payload.put("source", "BOOKING_MUTATION_AFTER_COMMIT");
         return payload;
     }

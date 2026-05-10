@@ -83,7 +83,7 @@ public class BookingSchedulerService {
                             buildPayload(
                                     "TABLE_RESERVED",
                                     current,
-                                    "Table is reserved 30 minutes before expected arrival"
+                                    "Bàn " + latestTable.getTableCode() + " được giữ chỗ trước 30 phút — khách sắp đến"
                             )
                     );
                 });
@@ -114,7 +114,7 @@ public class BookingSchedulerService {
                 bookingNotificationService.sendOnce(
                         BookingSchedulerConstant.TOPIC_BOOKING_UPDATES,
                         BookingSchedulerConstant.DEDUP_KEY_NO_SHOW_PREFIX + bookingId,
-                        buildPayload("BOOKING_EXPIRED_NO_SHOW", expired, "Booking expired after no-show window")
+                        buildPayload("BOOKING_EXPIRED_NO_SHOW", expired, "Booking #" + bookingId + " đã hết hạn — khách không check-in đúng giờ")
                 );
             } catch (Exception ex) {
                 log.debug("Skip no-show expiration for bookingId={} because state changed: {}", bookingId, ex.getMessage());
@@ -150,7 +150,9 @@ public class BookingSchedulerService {
                     buildPayload(
                             "TABLE_OCCUPIED_CONFLICT",
                             booking,
-                            "Occupied table has confirmed booking in " + Math.max(minutesToArrive, 0L) + " minutes"
+                            "Bàn " + (table.getTableCode() != null ? table.getTableCode() : "?") +
+                            " đang có khách nhưng có booking xác nhận đến trong " +
+                            Math.max(minutesToArrive, 0L) + " phút — vui lòng giải quyết"
                     )
             );
         }
@@ -183,7 +185,8 @@ public class BookingSchedulerService {
                             buildPayload(
                                     "NO_ORDER_AUTO_CANCELLED",
                                     cancelled,
-                                    "Booking auto-cancelled after 20 minutes without orders"
+                                    "Booking #" + bookingId + " tự động hủy — khách check-in " +
+                                    minutesSinceCheckIn + " phút chưa gọi món"
                             )
                     );
                 } catch (Exception ex) {
@@ -199,7 +202,8 @@ public class BookingSchedulerService {
                         buildPayload(
                                 "NO_ORDER_WARNING",
                                 booking,
-                                "Booking has no order for 10 minutes"
+                                "Khách bàn " + (booking.getTable() != null ? booking.getTable().getTableCode() : "?") +
+                                " check-in được " + minutesSinceCheckIn + " phút nhưng chưa gọi món"
                         )
                 );
             }
@@ -229,7 +233,44 @@ public class BookingSchedulerService {
                     buildPayload(
                             "CHECKOUT_REMINDER",
                             booking,
-                            "Booking is expected to checkout in " + Math.max(minutesToCheckout, 0L) + " minutes"
+                            "Bàn " + (booking.getTable() != null ? booking.getTable().getTableCode() : "?") +
+                            " sắp đến giờ checkout — còn " + Math.max(minutesToCheckout, 0L) + " phút"
+                    )
+            );
+        }
+    }
+
+    /**
+     * C\u1ea3nh b\u00e1o nh\u00e2n vi\u00ean khi b\u00e0n \u0111\u00e3 qu\u00e1 gi\u1edd expected_check_out nh\u01b0ng
+     * booking v\u1eabn CHECKED_IN v\u00e0 b\u00e0n (cafe_table) v\u1eabn OCCUPIED.
+     *
+     * <p>Dedup key ch\u1ee9a time-window (epoch / 120) \u2192 c\u00f9ng bookingId s\u1ebd d\u00f9ng key m\u1edbi
+     * sau m\u1ed7i 2 ph\u00fat, d\u1eabn \u0111\u1ebfn g\u1eedi l\u1ea1i th\u00f4ng b\u00e1o m\u1ed7i 2 ph\u00fat cho \u0111\u1ebfn khi b\u00e0n \u0111\u01b0\u1ee3c gi\u1ea3i ph\u00f3ng.
+     */
+    public void notifyOverdueCheckouts() {
+        Instant now = Instant.now();
+        List<TableBooking> overdueBookings = tableBookingRepository.findOverdueCheckedInBookings(now);
+
+        for (TableBooking booking : overdueBookings) {
+            Integer bookingId = booking.getId();
+            if (bookingId == null) {
+                continue;
+            }
+
+            long overdueMinutes = Duration.between(booking.getExpectedCheckOut(), now).toMinutes();
+            // Time-window key: thay \u0111\u1ed5i m\u1ed7i 2 ph\u00fat \u2192 g\u1eedi l\u1ea1i d\u00f9 dedup TTL l\u00e0 45 ph\u00fat
+            long twoMinuteWindow = now.getEpochSecond() / BookingSchedulerConstant.CHECKOUT_OVERDUE_REPEAT_SECONDS;
+            String dedupKey = BookingSchedulerConstant.DEDUP_KEY_CHECKOUT_OVERDUE_PREFIX
+                    + bookingId + ":" + twoMinuteWindow;
+
+            bookingNotificationService.sendOnce(
+                    BookingSchedulerConstant.TOPIC_TABLE_ALERTS,
+                    dedupKey,
+                    buildPayload(
+                            "CHECKOUT_OVERDUE",
+                            booking,
+                            "B\u00e0n " + (booking.getTable() != null ? booking.getTable().getTableCode() : "?") +
+                            " qu\u00e1 gi\u1edd checkout " + overdueMinutes + " ph\u00fat \u2014 vui l\u00f2ng x\u1eed l\u00fd thanh to\u00e1n"
                     )
             );
         }

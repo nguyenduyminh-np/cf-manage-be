@@ -41,7 +41,8 @@ public class SecurityConfig {
             "/api/v1/chat/public",
             "/public/**",
             "/images/**",
-            "/error"
+            "/error",
+            "/ws/**"          // SockJS handshake + WebSocket upgrade
     };
 
     @Bean

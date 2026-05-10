@@ -1,6 +1,7 @@
 package com.duyminhdev.cf_manager.service.booking;
 
 import com.duyminhdev.cf_manager.constant.BookingSchedulerConstant;
+import com.duyminhdev.cf_manager.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -19,6 +20,8 @@ public class BookingNotificationServiceImpl implements BookingNotificationServic
 
     private final BookingSchedulerDedupService bookingSchedulerDedupService;
     private final ObjectProvider<SimpMessagingTemplate> messagingTemplateProvider;
+    /** ObjectProvider để tránh circular dependency khi NotificationService cũng dùng Spring context */
+    private final ObjectProvider<NotificationService> notificationServiceProvider;
 
     @Override
     public void sendOnce(String topic, String dedupKey, Map<String, Object> payload) {
@@ -35,6 +38,12 @@ public class BookingNotificationServiceImpl implements BookingNotificationServic
         }
 
         messagingTemplate.convertAndSend(topic, envelope);
+
+        // Persist bất đồng bộ vào DB — không block thread WS
+        NotificationService notificationService = notificationServiceProvider.getIfAvailable();
+        if (notificationService != null) {
+            notificationService.saveFromWsEvent(topic, envelope);
+        }
     }
 
     private Map<String, Object> normalizePayload(String topic, String dedupKey, Map<String, Object> payload) {

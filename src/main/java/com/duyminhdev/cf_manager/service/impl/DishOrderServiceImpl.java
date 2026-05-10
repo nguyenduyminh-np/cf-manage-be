@@ -21,8 +21,11 @@ import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBooki
 import com.duyminhdev.cf_manager.repository.native_interface.impl.NativeSqlOrderHistoryRepositoryImpl;
 import com.duyminhdev.cf_manager.service.DishOrderService;
 import com.duyminhdev.cf_manager.service.VoucherService;
+import com.duyminhdev.cf_manager.service.booking.BookingNotificationService;
+import com.duyminhdev.cf_manager.constant.BookingSchedulerConstant;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +34,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +53,9 @@ public class DishOrderServiceImpl implements DishOrderService {
     private final DishOrderMapper dishOrderMapper;
     private final ServiceSupport serviceSupport;
     private final VoucherService voucherService;
+
+    /** ObjectProvider tránh circular dependency với BookingNotificationService */
+    private final ObjectProvider<BookingNotificationService> notificationProvider;
 
 
     @Override
@@ -241,6 +249,15 @@ public class DishOrderServiceImpl implements DishOrderService {
                 .collect(Collectors.toList());
 
         response.setDishOrderDetails(detailDTOs);
+
+        // ✔ WS: bếp nhận order mới
+        sendKitchenNotification(
+                "ORDER_CREATED",
+                BookingSchedulerConstant.DEDUP_KEY_ORDER_CREATED_PREFIX + savedOrder.getId(),
+                savedOrder, table, "Order mới tại bàn " + table.getTableCode()
+                        + " — " + detailsToSave.size() + " món"
+        );
+
         return response;
     }
 
@@ -349,7 +366,25 @@ public class DishOrderServiceImpl implements DishOrderService {
             }
 
             existing.setStatus(newStatus);
-            dishOrderRepository.save(existing);
+            DishOrder saved = dishOrderRepository.save(existing);
+
+            // ✔ WS: bếp biết trạng thái thay đổi
+            String statusCode2 = request.getDishOrderStatus();
+            if (DishOrderStatusCodeEnum.DONE.getCode().equalsIgnoreCase(statusCode2)) {
+                sendKitchenNotification(
+                        "ORDER_READY",
+                        BookingSchedulerConstant.DEDUP_KEY_ORDER_READY_PREFIX + saved.getId(),
+                        saved, saved.getTable(),
+                        "Món sẵn sàng lên bàn " + (saved.getTable() != null ? saved.getTable().getTableCode() : "?")
+                );
+            } else if (DishOrderStatusCodeEnum.CANCEL.getCode().equalsIgnoreCase(statusCode2)) {
+                sendKitchenNotification(
+                        "ORDER_CANCELLED",
+                        BookingSchedulerConstant.DEDUP_KEY_ORDER_CANCELLED_PREFIX + saved.getId(),
+                        saved, saved.getTable(),
+                        "Order bàn " + (saved.getTable() != null ? saved.getTable().getTableCode() : "?") + " bị hủy"
+                );
+            }
         }
 
         return true;
@@ -451,5 +486,32 @@ public class DishOrderServiceImpl implements DishOrderService {
                             .customerName("Khách vãng lai")
                             .build();
                 });
+    }
+
+    // ── Kitchen notification helper ───────────────────────────────────────────
+
+    private void sendKitchenNotification(String eventName, String dedupKey,
+                                         DishOrder order, TableEntity table, String message) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("event",     eventName);
+            payload.put("orderId",   order.getId());
+            payload.put("tableId",   table != null ? table.getId()       : null);
+            payload.put("tableCode", table != null ? table.getTableCode() : null);
+            payload.put("message",   message);
+            payload.put("at",        Instant.now());
+            payload.put("source",    "DISH_ORDER_SERVICE");
+
+            BookingNotificationService notifSvc = notificationProvider.getIfAvailable();
+            if (notifSvc != null) {
+                notifSvc.sendOnce(
+                        BookingSchedulerConstant.TOPIC_KITCHEN_ORDERS,
+                        dedupKey,
+                        payload
+                );
+            }
+        } catch (Exception ex) {
+            // Kitchen noti không nên làm hỏng luồng chính
+        }
     }
 }

@@ -307,4 +307,17 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             @Param("endTime") Instant endTime,
             @Param("statuses") Collection<String> statuses
     );
+    @EntityGraph(attributePaths = {"table", "account"})
+    @Query(value = """
+            select tb.*
+            from table_booking tb
+            inner join cafe_table ct on ct.id = tb.dining_table_id
+            where tb.is_active = 1
+              and upper(tb.booking_status) = upper('CHECKED_IN')
+              and tb.expected_check_out < :nowTime
+              and upper(ct.table_status) = upper('OCCUPIED')
+              and ct.is_active = 1
+            order by tb.expected_check_out asc
+            """, nativeQuery = true)
+    List<TableBooking> findOverdueCheckedInBookings(@Param("nowTime") Instant nowTime);
 }

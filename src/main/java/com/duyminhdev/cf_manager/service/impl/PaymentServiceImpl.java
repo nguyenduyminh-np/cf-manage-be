@@ -15,16 +15,21 @@ import com.duyminhdev.cf_manager.repository.*;
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.service.PaymentService;
 import com.duyminhdev.cf_manager.service.VoucherService;
+import com.duyminhdev.cf_manager.service.booking.BookingNotificationService;
+import com.duyminhdev.cf_manager.constant.BookingSchedulerConstant;
 import com.duyminhdev.cf_manager.utils.InvoiceCodeService;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -45,7 +50,11 @@ public class PaymentServiceImpl implements PaymentService {
     private final VoucherService voucherService;
     private final VoucherRepository voucherRepository;
 
+    /** ObjectProvider tránh circular dep với BookingNotificationService */
+    private final ObjectProvider<BookingNotificationService> notificationProvider;
+
     @Override
+    @Transactional
     public PaymentResponse processPayment(PaymentRequestDTO request) {
         Integer orderId = request.getOrderId();
         PaymentMethodEnum paymentMethod = PaymentMethodEnum.fromCode(request.getPaymentMethod());
@@ -61,6 +70,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (DishOrderStatusCodeEnum.PAID.getCode().equalsIgnoreCase(statusCode)) {
             throw new InvalidDataException("Đơn hàng này đã được thanh toán rồi");
         }
+
+        // Lưu tableCode để dùng trong catch nếu thất bại giữa chừng
+        final String tableCodeSnap = order.getTable() != null ? order.getTable().getTableCode() : "?";
+        try {
 
         // TO-DO kiểm tra xem đơn hàng đó đã có hóa đơn hay chưa
 
@@ -157,12 +170,25 @@ public class PaymentServiceImpl implements PaymentService {
         // 8. Đồng bộ trạng thái bàn (có thể giải phóng nếu không còn order unfinished)
         serviceSupport.recomputeAndSyncTableStatus(order.getTable().getId());
 
-        // 9. Xây dựng response
-        return PaymentResponse.builder()
+        // 9. Trả kết quả
+        PaymentResponse result = PaymentResponse.builder()
                 .invoice(toInvoiceDto(invoice))
                 .invoiceDetails(invoiceDetails.stream().map(this::toInvoiceDetailDto).toList())
                 .cashFlow(toCashFlowDto(cashFlow))
                 .build();
+
+            // ✔ WS: bàn đã thanh toán xong
+            sendPaymentCompletedNotification(order, invoice);
+            return result;
+
+        } catch (InvalidDataException ex) {
+            // Validation error (đã hủy, đã thanh toán...) — KHÔNG gửi PAYMENT_FAILED
+            throw ex;
+        } catch (Exception ex) {
+            // Lỗi thực sự (DB, voucher, ...) → cảnh báo nhân viên
+            sendPaymentFailedNotification(orderId, tableCodeSnap, ex.getMessage());
+            throw ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex);
+        }
     }
 
     /**
@@ -187,6 +213,9 @@ public class PaymentServiceImpl implements PaymentService {
 
         // ── 1. Lấy thông tin bàn ──────────────────────────────────────────────
         TableEntity table = serviceSupport.getActiveTable(request.getTableId());
+        // Lưu tableCode sớm để dùng trong catch block
+        final String tableCodeSnap = table.getTableCode();
+        try {
 
         // ── 2. Lấy trạng thái khởi tạo (PROCESSING) rồi set luôn PAID sau đó ──
         DishOrderStatus processingStatus = serviceSupport
@@ -312,12 +341,23 @@ public class PaymentServiceImpl implements PaymentService {
         // ── 11. Đồng bộ trạng thái bàn ───────────────────────────────────────
         serviceSupport.recomputeAndSyncTableStatus(table.getId());
 
-        // ── 12. Trả kết quả ───────────────────────────────────────────────────
-        return PaymentResponse.builder()
+        // ── 12. Trả kết quả ────────────────────────────────────────────────
+        PaymentResponse result = PaymentResponse.builder()
                 .invoice(toInvoiceDto(invoice))
                 .invoiceDetails(invoiceDetails.stream().map(this::toInvoiceDetailDto).toList())
                 .cashFlow(toCashFlowDto(cashFlow))
                 .build();
+
+            // ✔ WS: bàn đã thanh toán xong
+            sendPaymentCompletedNotification(savedOrder, invoice);
+            return result;
+
+        } catch (InvalidDataException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            sendPaymentFailedNotification(request.getTableId(), tableCodeSnap, ex.getMessage());
+            throw ex instanceof RuntimeException ? (RuntimeException) ex : new RuntimeException(ex);
+        }
     }
 
     private CustomerInfoDto getActiveBookingCustomer(Integer tableId) {
@@ -386,4 +426,69 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private record OrderItemSnapshot(Dish dish, Integer quantity, BigDecimal unitPrice) {}
+
+    // ── Payment notification helpers ──────────────────────────────────────
+
+    private void sendPaymentCompletedNotification(DishOrder order, Invoice invoice) {
+        try {
+            TableEntity table = order.getTable();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("event",       "PAYMENT_COMPLETED");
+            payload.put("orderId",     order.getId());
+            payload.put("invoiceCode", invoice.getInvoiceCode());
+            payload.put("tableId",     table != null ? table.getId()        : null);
+            payload.put("tableCode",   table != null ? table.getTableCode() : null);
+            payload.put("totalAmount", invoice.getTotalMoney());
+            payload.put("at",          Instant.now());
+            payload.put("message",     "Thanh toán thành công bàn "
+                    + (table != null ? table.getTableCode() : "?") + " — " + invoice.getInvoiceCode());
+            payload.put("source",      "PAYMENT_SERVICE");
+
+            BookingNotificationService notifSvc = notificationProvider.getIfAvailable();
+            if (notifSvc != null) {
+                notifSvc.sendOnce(
+                        BookingSchedulerConstant.TOPIC_BOOKING_UPDATES,
+                        BookingSchedulerConstant.DEDUP_KEY_PAYMENT_COMPLETED_PREFIX + invoice.getId(),
+                        payload
+                );
+            }
+        } catch (Exception ex) {
+            // Payment noti không nên làm hỏng luồng chính
+        }
+    }
+
+    /**
+     * Gửi cảnh báo thanh toán thất bại lên /topic/table-alerts.
+     * Chỉ gọi khi có lỗi thực sự (DB, voucher, ...) — không gọi cho InvalidDataException.
+     *
+     * @param refId      orderId hoặc tableId (để tạo dedup key)
+     * @param tableCode  mã bàn (có thể null)
+     * @param reason     thông tin lỗi
+     */
+    private void sendPaymentFailedNotification(Integer refId, String tableCode, String reason) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("event",     "PAYMENT_FAILED");
+            payload.put("tableCode", tableCode);
+            payload.put("reason",    reason);
+            payload.put("at",        Instant.now());
+            payload.put("message",   "Thanh toán thất bại bàn " + (tableCode != null ? tableCode : "?")
+                    + " — " + reason);
+            payload.put("source",    "PAYMENT_SERVICE");
+
+            BookingNotificationService notifSvc = notificationProvider.getIfAvailable();
+            if (notifSvc != null) {
+                // Dedup key có timestamp — mỗi lần thất bại đều gửi (không dùng TTL che)
+                String dedupKey = BookingSchedulerConstant.DEDUP_KEY_PAYMENT_FAILED_PREFIX
+                        + refId + ":" + System.currentTimeMillis();
+                notifSvc.sendOnce(
+                        BookingSchedulerConstant.TOPIC_TABLE_ALERTS,
+                        dedupKey,
+                        payload
+                );
+            }
+        } catch (Exception ex) {
+            // Silent — failure noti không được throw lại
+        }
+    }
 }

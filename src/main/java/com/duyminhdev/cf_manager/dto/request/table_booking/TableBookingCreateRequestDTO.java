@@ -29,8 +29,6 @@ public class TableBookingCreateRequestDTO {
     private String customerName;
 
   //  @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Số điện thoại không đúng định dạng")
-    @Min(value = 1, message = "Lỗi sdt")
-    @Max(value = 15, message = "Lỗi sdt")
     private String phoneNumber;
 
     @JsonAlias("deposit")
