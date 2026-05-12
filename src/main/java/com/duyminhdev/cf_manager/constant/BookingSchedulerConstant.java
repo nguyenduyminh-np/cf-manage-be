@@ -12,6 +12,8 @@ public final class BookingSchedulerConstant {
     public static final long NO_ORDER_WARNING_MINUTES = 10L;
     public static final long NO_ORDER_CANCEL_MINUTES = 20L;
     public static final long CHECKOUT_REMINDER_MINUTES = 15L;
+    /** Cửa sổ thời gian cảnh báo: nếu đang tạo booking mà bàn đó có đơn CONFIRMED trong vòng 2 tiếng tới → cảnh báo vàng */
+    public static final long UPCOMING_BOOKING_WARN_HOURS = 2L;
     /** Nhắc overdue mỗi 2 phút bằng cách dùng time-window key (epoch / 120) */
     public static final long CHECKOUT_OVERDUE_REPEAT_SECONDS = 120L;
 
@@ -36,6 +38,8 @@ public final class BookingSchedulerConstant {
     public static final String DEDUP_KEY_MUTATION_BOOKING_PREFIX  = "booking:mutation:booking:";
     public static final String DEDUP_KEY_MUTATION_TABLE_PREFIX    = "booking:mutation:table:";
     public static final String DEDUP_KEY_MUTATION_DEPOSIT_PREFIX  = "booking:mutation:deposit:";
+    /** Dedup key cho cảnh báo vàng: bàn có đơn CONFIRMED sắp đến trong 2 tiếng */
+    public static final String DEDUP_KEY_UPCOMING_BOOKING_WARN_PREFIX = "booking:warn:upcoming:create:";
 
     // Kitchen order dedup keys
     public static final String DEDUP_KEY_ORDER_CREATED_PREFIX     = "order:kitchen:created:";

@@ -448,4 +448,37 @@ public class NativeSqlDashboardRepositoryImpl implements NativeSqlDashboardRepos
                         .build())
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<DashboardPendingBookingItemDTO> getPendingBookings() {
+        String sql = """
+                SELECT
+                    tb.id            AS bookingId,
+                    tb.customer_name AS customerName,
+                    tb.phone_number  AS phoneNumber,
+                    ct.table_name    AS tableName,
+                    tb.expected_arrive_time AS expectedArriveTime,
+                    tb.created_at    AS createdAt,
+                    tb.note          AS note
+                FROM table_booking tb
+                JOIN cafe_table ct ON tb.dining_table_id = ct.id
+                WHERE tb.booking_status = 'PENDING'
+                  AND tb.is_active = 1
+                ORDER BY tb.created_at ASC
+                """;
+        Query query = entityManager.createNativeQuery(sql, Tuple.class);
+        @SuppressWarnings("unchecked")
+        List<Tuple> tuples = query.getResultList();
+        return tuples.stream()
+                .map(t -> DashboardPendingBookingItemDTO.builder()
+                        .bookingId(NativeSqlTupleUtils.getInteger(t, "bookingId"))
+                        .customerName(NativeSqlTupleUtils.getString(t, "customerName"))
+                        .phoneNumber(NativeSqlTupleUtils.getString(t, "phoneNumber"))
+                        .tableName(NativeSqlTupleUtils.getString(t, "tableName"))
+                        .expectedArriveTime(NativeSqlTupleUtils.getInstant(t, "expectedArriveTime"))
+                        .createdAt(NativeSqlTupleUtils.getInstant(t, "createdAt"))
+                        .note(NativeSqlTupleUtils.getString(t, "note"))
+                        .build())
+                .collect(Collectors.toList());
+    }
 }

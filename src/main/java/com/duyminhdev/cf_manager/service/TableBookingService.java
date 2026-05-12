@@ -17,6 +17,7 @@ import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingWalkInReq
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingAvailableSlotResponseDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingExportDTO;
 import com.duyminhdev.cf_manager.dto.response.table_booking.TableBookingResponseDTO;
+import com.duyminhdev.cf_manager.dto.base.ServiceResult;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
@@ -39,8 +40,9 @@ public interface TableBookingService {
 
     /**
      * Tạo mới một booking cho bàn và đồng bộ trạng thái bàn.
+     * Trả về {@link ServiceResult} — có thể chứa danh sách cảnh báo vàng nếu bàn có đơn CONFIRMED sắp tới.
      */
-    TableBookingResponseDTO create(TableBookingCreateRequestDTO request);
+    ServiceResult<TableBookingResponseDTO> create(TableBookingCreateRequestDTO request);
 
     /**
      * Lấy chi tiết đầy đủ của một booking theo id.

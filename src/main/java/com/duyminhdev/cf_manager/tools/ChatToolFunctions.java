@@ -151,7 +151,7 @@ public class ChatToolFunctions {
             req.setExpectedArriveTime(Instant.parse(arriveTime));
             req.setExpectedCheckOut(Instant.parse(checkOutTime));
 
-            TableBookingResponseDTO booking = bookingService.create(req);
+            TableBookingResponseDTO booking = bookingService.create(req).getData();
             return String.format("ĐẶT BÀN THÀNH CÔNG. Mã booking: %s. Bàn: %s. Thời gian: %s.",
                     booking.getBookingInvoiceCode(),
                     booking.getTableName(),

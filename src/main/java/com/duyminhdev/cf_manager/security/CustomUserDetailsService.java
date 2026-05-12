@@ -45,8 +45,9 @@ public class CustomUserDetailsService implements UserDetailsService {
             throw new UsernameNotFoundException("User role is inactive");
         }
 
-        // Load the active (non-revoked) token's JTI for JTI comparison in the filter
-        String activeJti = tokenRepo.findByAccountAndRevokedFalse(account)
+        // Lấy JTI của token active MỚI NHẤT để dùng cho JTI-check ở filter.
+        // Dùng findTop...OrderBy... để tránh NonUniqueResultException nếu DB có dữ liệu bẩn.
+        String activeJti = tokenRepo.findTopByAccountAndRevokedFalseOrderByCreatedTimeDesc(account)
                 .map(AccountToken::getAccessTokenJti)
                 .orElse(null);
 

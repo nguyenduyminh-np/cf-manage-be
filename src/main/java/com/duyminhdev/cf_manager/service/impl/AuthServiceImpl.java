@@ -204,11 +204,10 @@ public class AuthServiceImpl implements AuthService {
      * Issues new access + refresh tokens, revokes any existing active token, and saves a new AccountToken.
      */
     private AuthResponse issueTokens(Account account, String message) {
-        // Revoke any existing active token for this account
-        tokenRepo.findByAccountAndRevokedFalse(account).ifPresent(oldToken -> {
-            oldToken.setRevoked(true);
-            tokenRepo.save(oldToken);
-        });
+        // Bulk-revoke TẤT CẢ token active của account này trước khi phát token mới.
+        // Dùng @Query JPQL thay vì find-then-save để tránh NonUniqueResultException
+        // khi DB có nhiều row is_revoked=false (race condition / dữ liệu bẩn).
+        tokenRepo.revokeAllByAccountId(account.getId());
 
         // Generate new tokens
         String accessToken = jwtService.generateAccessToken(account);

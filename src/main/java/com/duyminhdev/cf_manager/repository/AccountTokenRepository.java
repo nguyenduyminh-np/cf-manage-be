@@ -16,7 +16,11 @@ public interface AccountTokenRepository extends JpaRepository<AccountToken, Inte
 
     Optional<AccountToken> findByRefreshTokenAndRevokedFalse(String refreshToken);
 
-    Optional<AccountToken> findByAccountAndRevokedFalse(Account account);
+    /**
+     * Lấy token active MỚI NHẤT của account (tránh NonUniqueResultException
+     * khi DB có nhiều row is_revoked=false do race condition hoặc dữ liệu bẩn).
+     */
+    Optional<AccountToken> findTopByAccountAndRevokedFalseOrderByCreatedTimeDesc(Account account);
 
         @Modifying(clearAutomatically = true, flushAutomatically = true)
         @Query("""

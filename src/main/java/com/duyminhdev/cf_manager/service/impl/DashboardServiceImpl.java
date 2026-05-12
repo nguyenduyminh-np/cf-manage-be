@@ -112,4 +112,9 @@ public class DashboardServiceImpl implements DashboardService {
     public List<DashboardDraftPurchaseOrderItemDTO> getDraftPurchaseOrders() {
         return dashboardRepository.getDraftPurchaseOrders();
     }
+
+    @Override
+    public List<DashboardPendingBookingItemDTO> getPendingBookings() {
+        return dashboardRepository.getPendingBookings();
+    }
 }

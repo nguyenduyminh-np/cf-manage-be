@@ -6,16 +6,20 @@ import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
-@Component("adminOrManagerAuthorization")
-public class AdminOrManagerAuthorization {
+@Component("adminOnlyAuthorization")
+public class AdminOnlyAuthorization {
 
     private static final String ADMIN_AUTHORITY = "ROLE_ADMIN";
-    private static final String STAFF_AUTHORITY = "ROLE_STAFF";
 
     /**
-     * Cho phép ADMIN (Quản lý) hoặc STAFF (Nhân viên) truy cập.
-     * Dùng cho các chức năng nghiệp vụ chung mà cả hai role đều cần
-     * (POS, bàn, order, đặt bàn, thanh toán, v.v.)
+     * Chỉ cho phép ADMIN (Quản lý) truy cập.
+     * Dùng cho các chức năng quản trị nhạy cảm:
+     *  - Quản lý tài khoản nhân viên
+     *  - Dashboard tổng quan
+     *  - Quản lý kho hàng, nhà cung cấp
+     *  - Quản lý voucher (CRUD)
+     *  - Hóa đơn, báo cáo
+     *  - AI Chat (dữ liệu nhạy cảm)
      */
     public boolean check(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -25,8 +29,6 @@ public class AdminOrManagerAuthorization {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .filter(Objects::nonNull)
-                .anyMatch(authority ->
-                        ADMIN_AUTHORITY.equals(authority) ||
-                        STAFF_AUTHORITY.equals(authority));
+                .anyMatch(ADMIN_AUTHORITY::equals);
     }
 }

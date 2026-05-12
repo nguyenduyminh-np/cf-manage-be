@@ -4,9 +4,9 @@ import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.request.chat.ChatRequest;
 import com.duyminhdev.cf_manager.dto.response.chat.ChatResponse;
 import com.duyminhdev.cf_manager.service.AiChatService;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,7 +25,7 @@ public class AiChatController {
      * Yêu cầu JWT. Có các quyền mở rộng như xem doanh thu, xem tồn kho.
      */
     @PostMapping("/staff")
-    @PreAuthorize("hasAnyRole('ADMIN')")
+    @AdminOnlyAccess
     public ApiResponse<ChatResponse> staffChat(
             @Valid @RequestBody ChatRequest request,
             Authentication authentication) {

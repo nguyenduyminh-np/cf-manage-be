@@ -5,7 +5,7 @@ import com.duyminhdev.cf_manager.dto.auth.LogoutRequest;
 import com.duyminhdev.cf_manager.dto.auth.RefreshRequest;
 import com.duyminhdev.cf_manager.dto.auth.RegisterRequest;
 import com.duyminhdev.cf_manager.dto.base.AuthResponse;
-import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +43,7 @@ public class AuthController {
     }
 
     @PostMapping("/register-admin")
-    @AdminOrManagerAccess
+    @AdminOnlyAccess
     public AuthResponse registerAdmin(@Valid @RequestBody RegisterRequest req) {
         return authService.registerAdmin(req.getUsername(), req.getPassword(), req.getFullName());
     }

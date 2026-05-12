@@ -79,4 +79,7 @@ public interface NativeSqlDashboardRepository {
 
     /** Bảng 5 – Đơn nhập hàng đang soạn (DRAFT). */
     List<DashboardDraftPurchaseOrderItemDTO> getDraftPurchaseOrders();
+
+    /** Bảng 6 – Đặt bàn chờ xác nhận (status = PENDING). */
+    List<DashboardPendingBookingItemDTO> getPendingBookings();
 }

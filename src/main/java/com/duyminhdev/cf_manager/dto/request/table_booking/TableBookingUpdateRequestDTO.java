@@ -33,7 +33,7 @@ public class TableBookingUpdateRequestDTO {
     @Size(max = 255, message = "Tên khách hàng không được vượt quá 255 ký tự")
     private String customerName;
 
-    @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Số điện thoại không đúng định dạng")
+  // @Pattern(regexp = "^$|" + ValidateValueConstants.PHONE_NUMBER, message = "Số điện thoại không đúng định dạng")
     private String phoneNumber;
 
     @JsonAlias("deposit")

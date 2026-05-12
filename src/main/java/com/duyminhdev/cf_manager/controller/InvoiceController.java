@@ -4,7 +4,7 @@ import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.invoice.*;
 import com.duyminhdev.cf_manager.dto.response.invoice.*;
-import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.InvoiceService;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,7 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/invoice")
 @RequiredArgsConstructor
-@AdminOrManagerAccess
+@AdminOnlyAccess
 public class InvoiceController {
 
     private final InvoiceService invoiceService;

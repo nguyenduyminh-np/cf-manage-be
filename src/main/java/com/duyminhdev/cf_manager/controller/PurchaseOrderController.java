@@ -4,6 +4,7 @@ import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.purchase_order.*;
 import com.duyminhdev.cf_manager.dto.response.purchase_order.*;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.PurchaseOrderService;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,6 +19,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/purchase-order")
 @RequiredArgsConstructor
+@AdminOnlyAccess
 public class PurchaseOrderController {
 
     private final PurchaseOrderService service;

@@ -181,6 +181,27 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
         return findNextConfirmedBookingOnTableInternal(tableId, afterTime).stream().findFirst();
     }
 
+    /**
+     * Kiểm tra bàn có đơn CONFIRMED nào sẽ đến trong cửa sổ [fromTime, toTime] không.
+     * Dùng để phát cảnh báo vàng khi tạo booking mới trên bàn đã có đơn CONFIRMED sắp tới.
+     */
+    @Query("""
+            select case when count(tb) > 0 then true else false end
+            from TableBooking tb
+            where tb.table.id = :tableId
+              and tb.active = true
+              and upper(tb.bookingStatus) = 'CONFIRMED'
+              and tb.expectedArriveTime >= :fromTime
+              and tb.expectedArriveTime <= :toTime
+              and (:excludeBookingId is null or tb.id <> :excludeBookingId)
+            """)
+    boolean existsUpcomingConfirmedBookingInWindow(
+            @Param("tableId") Integer tableId,
+            @Param("fromTime") Instant fromTime,
+            @Param("toTime") Instant toTime,
+            @Param("excludeBookingId") Integer excludeBookingId
+    );
+
     @Query(value = """
             select tb.*
             from table_booking tb
@@ -308,16 +329,15 @@ public interface TableBookingRepository extends JpaRepository<TableBooking, Inte
             @Param("statuses") Collection<String> statuses
     );
     @EntityGraph(attributePaths = {"table", "account"})
-    @Query(value = """
-            select tb.*
-            from table_booking tb
-            inner join cafe_table ct on ct.id = tb.dining_table_id
-            where tb.is_active = 1
-              and upper(tb.booking_status) = upper('CHECKED_IN')
-              and tb.expected_check_out < :nowTime
-              and upper(ct.table_status) = upper('OCCUPIED')
-              and ct.is_active = 1
-            order by tb.expected_check_out asc
-            """, nativeQuery = true)
+    @Query("""
+            select tb
+            from TableBooking tb
+            where tb.active = true
+              and upper(tb.bookingStatus) = upper('CHECKED_IN')
+              and tb.expectedCheckOut < :nowTime
+              and upper(tb.table.tableStatus) = upper('OCCUPIED')
+              and tb.table.active = true
+            order by tb.expectedCheckOut asc
+            """)
     List<TableBooking> findOverdueCheckedInBookings(@Param("nowTime") Instant nowTime);
 }

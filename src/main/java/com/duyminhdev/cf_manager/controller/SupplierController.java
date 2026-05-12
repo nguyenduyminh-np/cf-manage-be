@@ -5,7 +5,7 @@ import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.supplier.*;
 import com.duyminhdev.cf_manager.dto.response.supplier.*;
 import com.duyminhdev.cf_manager.exceptions.InvalidDataException;
-import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.SupplierService;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,7 +20,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/supplier")
 @RequiredArgsConstructor
-@AdminOrManagerAccess
+@AdminOnlyAccess
 public class SupplierController {
 
     private final SupplierService supplierService;

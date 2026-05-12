@@ -2,7 +2,7 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.response.dashboard.*;
-import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,7 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/dashboard")
 @RequiredArgsConstructor
-@AdminOrManagerAccess
+@AdminOnlyAccess
 public class DashboardController {
 
     private final DashboardService dashboardService;
@@ -148,5 +148,16 @@ public class DashboardController {
     public ApiResponse<List<DashboardDraftPurchaseOrderItemDTO>> getDraftPurchaseOrders() {
         return new ApiResponse<>(200, "GET_DRAFT_PURCHASE_ORDERS_SUCCESS",
                 dashboardService.getDraftPurchaseOrders());
+    }
+
+    /**
+     * Bảng 6 – Đặt bàn chờ xác nhận (booking_status = PENDING).
+     * Hiển thị cho mọi role để nhân viên / quản lý biết cần xác nhận.
+     * Sắp xếp theo thời gian tạo tăng dần (ưu tiên booking chờ lâu nhất).
+     */
+    @PostMapping("/table/pending-bookings")
+    public ApiResponse<List<DashboardPendingBookingItemDTO>> getPendingBookings() {
+        return new ApiResponse<>(200, "GET_PENDING_BOOKINGS_SUCCESS",
+                dashboardService.getPendingBookings());
     }
 }

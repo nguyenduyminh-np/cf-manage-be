@@ -1,6 +1,8 @@
 package com.duyminhdev.cf_manager.service.impl;
 
+import com.duyminhdev.cf_manager.constant.BookingSchedulerConstant;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.base.ServiceResult;
 import com.duyminhdev.cf_manager.dto.db_result.native_sql.TableBookingDetailNativeResultDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingAvailableSlotsRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCancelRequestDTO;
@@ -30,6 +32,7 @@ import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBooki
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
 import com.duyminhdev.cf_manager.repository.spec.TableBookingSpec;
 import com.duyminhdev.cf_manager.service.booking.BookingUseCaseService;
+import com.duyminhdev.cf_manager.service.booking.BookingNotificationService;
 import com.duyminhdev.cf_manager.service.TableBookingService;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingTransitionContext;
@@ -44,6 +47,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -85,6 +89,7 @@ public class TableBookingServiceImpl implements TableBookingService {
     private final BookingDomainEventPublisher bookingDomainEventPublisher;
     private final BookingUseCaseService bookingUseCaseService;
     private final NativeSqlTableBookingRepository nativeSqlTableBookingRepository;
+    private final BookingNotificationService bookingNotificationService;
 
     @Override
     public List<TableBookingResponseDTO> getPendingAndConfirmedBookings(TableBookingSearchRequestDTO request) {
@@ -221,14 +226,77 @@ public class TableBookingServiceImpl implements TableBookingService {
 
     @Override
     @Transactional
-    public TableBookingResponseDTO create(TableBookingCreateRequestDTO request) {
+    public ServiceResult<TableBookingResponseDTO> create(TableBookingCreateRequestDTO request) {
+        TableBooking saved;
+
         if (request != null && Boolean.TRUE.equals(request.getIsWalkIn())) {
-            TableBooking savedWalkIn = bookingUseCaseService.createWalkIn(request, false);
-            return tableBookingMapper.toResponseDTO(savedWalkIn);
+            saved = bookingUseCaseService.createWalkIn(request, false);
+            return ServiceResult.ok(tableBookingMapper.toResponseDTO(saved));
         }
 
-        TableBooking saved = bookingUseCaseService.createBooking(request);
-        return tableBookingMapper.toResponseDTO(saved);
+        saved = bookingUseCaseService.createBooking(request);
+        TableBookingResponseDTO dto = tableBookingMapper.toResponseDTO(saved);
+
+        // --- Kiểm tra cảnh báo: bàn có đơn CONFIRMED sắp tới trong 2 tiếng ---
+        List<String> warnings = buildUpcomingBookingWarnings(saved);
+
+        if (!warnings.isEmpty()) {
+            // Publish WebSocket warning notification (kênh riêng, không làm toàn hệ thống bất ngờ)
+            bookingNotificationService.sendOnce(
+                    BookingSchedulerConstant.TOPIC_TABLE_ALERTS,
+            BookingSchedulerConstant.DEDUP_KEY_UPCOMING_BOOKING_WARN_PREFIX
+                            + saved.getId() + ":" + saved.getTable().getId(),
+                    buildUpcomingWarningWsPayload(saved, warnings)
+            );
+        }
+
+        return warnings.isEmpty()
+                ? ServiceResult.ok(dto)
+                : ServiceResult.withWarnings(dto, warnings);
+    }
+
+    /**
+     * Kiểm tra xem sau khi tạo xong, bàn có đơn CONFIRMED nào sắp tới trong 2 tiếng không.
+     * Nếu có: thêm note vào đơn vừa tạo và trả về danh sách warning message.
+     */
+    private List<String> buildUpcomingBookingWarnings(TableBooking saved) {
+        Instant now = Instant.now();
+        Instant twoHoursLater = now.plus(Duration.ofHours(BookingSchedulerConstant.UPCOMING_BOOKING_WARN_HOURS));
+
+        boolean hasUpcoming = tableBookingRepository.existsUpcomingConfirmedBookingInWindow(
+                saved.getTable().getId(),
+                now,
+                twoHoursLater,
+                saved.getId()   // loại trừ chính đơn vừa tạo
+        );
+
+        if (!hasUpcoming) {
+            return List.of();
+        }
+
+        // Append vào note của đơn
+        String warningNote = "⚠️ Bàn đã có đơn đặt xác nhận sắp tới trong vòng 2 tiếng";
+        String currentNote = saved.getNote();
+        saved.setNote(currentNote != null && !currentNote.isBlank()
+                ? currentNote + " | " + warningNote
+                : warningNote);
+        tableBookingRepository.save(saved);
+
+        String warningMsg = "Bàn " + saved.getTable().getTableCode()
+                + " đã có đơn đặt bàn được xác nhận sắp tới trong vòng 2 tiếng tới. Vui lòng kiểm tra lại lịch trước khi xác nhận đơn này.";
+        return List.of(warningMsg);
+    }
+
+    private java.util.Map<String, Object> buildUpcomingWarningWsPayload(TableBooking saved, List<String> warnings) {
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("event", "BOOKING_UPCOMING_CONFLICT_WARNING");
+        payload.put("bookingId", saved.getId());
+        payload.put("tableId", saved.getTable().getId());
+        payload.put("tableCode", saved.getTable().getTableCode());
+        payload.put("severity", "WARNING");
+        payload.put("message", warnings.get(0));
+        payload.put("at", Instant.now().toString());
+        return payload;
     }
 
     @Override

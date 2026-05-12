@@ -2,6 +2,7 @@ package com.duyminhdev.cf_manager.controller;
 
 import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
+import com.duyminhdev.cf_manager.dto.base.ServiceResult;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingAvailableSlotsRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCancelRequestDTO;
 import com.duyminhdev.cf_manager.dto.request.table_booking.TableBookingCheckInRequestDTO;
@@ -45,15 +46,19 @@ public class TableBookingController {
     private final TableBookingService tableBookingService;
 
     /**
-     * Nghiep vu: Tao booking moi cho ban.
+     * Nghập vụ: Tao booking moi cho ban.
      * Rule: Khong cho phep tao booking trung khung gio tren ban.
      * Chuc nang: Goi service create va tra booking vua tao.
+     * <p>
+     * Nếu bàn có đơn CONFIRMED sắp tới trong 2 tiếng, response sẽ kèm field {@code warnings[]} —
+     * FE hiển thị toast màu vàng để nhắc nhở nhân viên.
      */
     @PostMapping("/create")
     public ApiResponse<TableBookingResponseDTO> create(
             @Valid @RequestBody TableBookingCreateRequestDTO request
     ) {
-        return new ApiResponse<>(200, "CREATE_TABLE_BOOKING_SUCCESS", tableBookingService.create(request));
+        ServiceResult<TableBookingResponseDTO> result = tableBookingService.create(request);
+        return result.toApiResponse(200, "CREATE_TABLE_BOOKING_SUCCESS");
     }
 
     @PostMapping("/pending-job")

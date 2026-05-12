@@ -4,7 +4,7 @@ import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.ingredient_category.*;
 import com.duyminhdev.cf_manager.dto.response.ingredient_category.*;
-import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.IngredientCategoryService;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,7 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/ingredient-category")
 @RequiredArgsConstructor
-@AdminOrManagerAccess
+@AdminOnlyAccess
 public class IngredientCategoryController {
 
     private final IngredientCategoryService service;

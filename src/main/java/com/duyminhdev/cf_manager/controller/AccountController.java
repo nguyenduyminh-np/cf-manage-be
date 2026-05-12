@@ -5,11 +5,11 @@ import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.account.*;
 import com.duyminhdev.cf_manager.dto.response.account.*;
 import com.duyminhdev.cf_manager.service.AccountService;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -19,7 +19,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/account")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')") // giả sử quyền ADMIN
+@AdminOnlyAccess
 public class AccountController {
 
     private final AccountService accountService;

@@ -10,6 +10,8 @@ import com.duyminhdev.cf_manager.lock.booking.BookingLockService;
 import com.duyminhdev.cf_manager.mapper.TableBookingMapper;
 import com.duyminhdev.cf_manager.repository.native_interface.NativeSqlTableBookingRepository;
 import com.duyminhdev.cf_manager.repository.TableBookingRepository;
+import com.duyminhdev.cf_manager.service.NotificationService;
+import com.duyminhdev.cf_manager.service.booking.BookingNotificationService;
 import com.duyminhdev.cf_manager.service.booking.BookingUseCaseService;
 import com.duyminhdev.cf_manager.state_machine.booking.BookingStateMachine;
 import com.duyminhdev.cf_manager.utils.ServiceSupport;
@@ -59,6 +61,9 @@ class TableBookingServiceImplTest {
 
     private TableBookingServiceImpl tableBookingService;
 
+    @Mock
+    private BookingNotificationService bookingNotificationService;
+
     @BeforeEach
     void setUp() {
         tableBookingService = new TableBookingServiceImpl(
@@ -69,7 +74,8 @@ class TableBookingServiceImplTest {
                 bookingLockService,
                 bookingDomainEventPublisher,
                 bookingUseCaseService,
-                nativeSqlTableBookingRepository
+                nativeSqlTableBookingRepository,
+                bookingNotificationService
         );
     }
 

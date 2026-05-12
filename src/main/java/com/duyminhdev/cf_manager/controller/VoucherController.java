@@ -4,6 +4,7 @@ import com.duyminhdev.cf_manager.dto.base.ApiResponse;
 import com.duyminhdev.cf_manager.dto.request.voucher.VoucherCreateRequestDTO;
 import com.duyminhdev.cf_manager.dto.response.voucher.DiscountPreviewDTO;
 import com.duyminhdev.cf_manager.dto.response.voucher.VoucherResponseDTO;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
 import com.duyminhdev.cf_manager.service.VoucherService;
 import jakarta.validation.Valid;
@@ -19,7 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/voucher")
 @RequiredArgsConstructor
-@AdminOrManagerAccess
+@AdminOnlyAccess
 public class VoucherController {
 
     private final VoucherService voucherService;
@@ -57,8 +58,10 @@ public class VoucherController {
     /**
      * Preview discount: kiểm tra mã + tính toán giảm giá KHÔNG thay đổi DB.
      * FE gọi khi nhân viên nhập mã voucher ở màn hình preview thanh toán.
+     * STAFF cũng được phép gọi endpoint này.
      */
     @PostMapping("/preview")
+    @AdminOrManagerAccess
     public ApiResponse<DiscountPreviewDTO> preview(
             @NotBlank @RequestParam String code,
             @NotNull @RequestParam BigDecimal totalAmount

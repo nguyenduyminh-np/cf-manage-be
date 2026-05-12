@@ -5,7 +5,7 @@ import com.duyminhdev.cf_manager.dto.base.PageResponse;
 import com.duyminhdev.cf_manager.dto.request.ingredient.IngredientIdRequest;
 import com.duyminhdev.cf_manager.dto.request.ingredient.*;
 import com.duyminhdev.cf_manager.dto.response.ingredient.*;
-import com.duyminhdev.cf_manager.security.authorization.AdminOrManagerAccess;
+import com.duyminhdev.cf_manager.security.authorization.AdminOnlyAccess;
 import com.duyminhdev.cf_manager.service.IngredientService;
 import com.duyminhdev.cf_manager.utils.ExcelUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,7 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/ingredient")
 @RequiredArgsConstructor
-@AdminOrManagerAccess
+@AdminOnlyAccess
 public class IngredientController {
 
     private final IngredientService ingredientService;
